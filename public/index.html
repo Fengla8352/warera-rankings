@@ -24,7 +24,7 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--body); }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  .wrap { max-width: 1600px; margin: 0 auto; padding: 24px 16px 48px; }
   header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
   h1 { font: 700 28px/1.1 var(--display); margin: 0; letter-spacing: .2px; }
   .sub { color: var(--muted); margin: 4px 0 0; }
@@ -37,10 +37,12 @@
   input[type=search]:focus-visible, th button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
   .notice { background: #2a2312; border: 1px solid #5a4a1c; color: #e8d49a; padding: 10px 12px; border-radius: 4px; margin-bottom: 12px; display: none; }
   .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
-  table { border-collapse: collapse; width: 100%; min-width: 640px; }
-  th, td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { white-space: normal; vertical-align: bottom; line-height: 1.25; }
+  td { font-size: 13px; }
   th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2) { text-align: left; }
-  th { position: sticky; top: 0; background: #1b2420; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  th { position: sticky; top: 0; background: #1b2420; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; }
   th button:hover { color: var(--fg); }
   th.sorted { color: var(--gold); }
@@ -120,12 +122,27 @@ function buildColumns(list) {
     }
   }
   const all = [...keys.keys()];
-  const income = all.filter(k => /income/i.test(k));
+  // Tax rates (taxes.*) are percentages, not income amounts, so they are not highlighted as income.
+  const income = all.filter(k => /income/i.test(k) && !k.startsWith("taxes."));
   const rest = all.filter(k => !income.includes(k));
-  return { income, cols: [...income, ...rest].slice(0, 8) };
+  return { income, cols: [...income, ...rest].slice(0, 14) };
 }
 const get = (c, path) => path.split(".").reduce((o, k) => o?.[k], c);
-const pretty = k => k.replace(/\./g, " · ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, s => s.toUpperCase());
+const humanize = s => s.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().replace(/^./, ch => ch.toUpperCase());
+const labels = {};
+function buildLabels(keys) {
+  const base = {};
+  for (const k of keys) {
+    const parts = k.split(".");
+    let l = humanize(parts[parts.length - 1]);
+    if (parts[0] === "taxes") l = l.replace(/ tax$/i, "") + " tax %";
+    base[k] = l;
+  }
+  const count = {};
+  Object.values(base).forEach(l => count[l] = (count[l] || 0) + 1);
+  for (const k of keys) labels[k] = count[base[k]] > 1 ? base[k] + " (" + humanize(k.split(".")[0]) + ")" : base[k];
+}
+const pretty = k => labels[k] || humanize(k);
 
 /* ---------- State & render ---------- */
 let rows = [], cols = [], incomeCols = [], sortKey = null, sortDir = -1, filter = "";
@@ -168,7 +185,10 @@ async function load() {
     rows = list;
     const built = buildColumns(list);
     cols = built.cols; incomeCols = built.income;
-    if (!sortKey || (sortKey !== "name" && !cols.includes(sortKey))) sortKey = incomeCols[0] || cols[0];
+    buildLabels(cols);
+    if (!sortKey || (sortKey !== "name" && !cols.includes(sortKey))) {
+      sortKey = incomeCols[0] || cols.find(k => /^development$/i.test(k)) || cols.find(k => /development/i.test(k)) || cols[0];
+    }
     notice.style.display = incomeCols.length ? "none" : "block";
     if (!incomeCols.length) notice.textContent = "The API response has no daily income field, so countries are sorted by another stat. Open Raw data below to see exactly what the API returns.";
     render();
