@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WarEra Country Rankings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one dense ledger table under a slim header, like a treasury register. */
+  :root {
+    --bg: #0f1412;
+    --panel: #161d1a;
+    --line: #26312c;
+    --fg: #e6ebe7;
+    --muted: #8a9890;
+    --gold: #d9a73a;
+    --good: #5fbf8a;
+    --bad: #e0705f;
+    --display: "Bitter", Georgia, serif;
+    --body: "IBM Plex Sans", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--body); }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  h1 { font: 700 28px/1.1 var(--display); margin: 0; letter-spacing: .2px; }
+  .sub { color: var(--muted); margin: 4px 0 0; }
+  .status { font: 12px var(--mono); color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--good); }
+  .dot.err { background: var(--bad); }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  input[type=search] { background: var(--panel); border: 1px solid var(--line); color: var(--fg); padding: 8px 10px; border-radius: 4px; min-width: 220px; font: inherit; }
+  input[type=search]:focus-visible, th button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .notice { background: #2a2312; border: 1px solid #5a4a1c; color: #e8d49a; padding: 10px 12px; border-radius: 4px; margin-bottom: 12px; display: none; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; }
+  th, td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th { position: sticky; top: 0; background: #1b2420; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; }
+  th button:hover { color: var(--fg); }
+  th.sorted { color: var(--gold); }
+  td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  td:nth-child(2) { font-family: var(--body); font-weight: 500; }
+  td.rank { color: var(--muted); width: 52px; }
+  td.income { color: var(--gold); font-weight: 500; }
+  tbody tr:hover { background: #1b2420; }
+  tbody tr:last-child td { border-bottom: 0; }
+  footer { margin-top: 16px; color: var(--muted); font-size: 12px; }
+  footer a { color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) { .dot.live { animation: pulse 2s infinite; } }
+  @keyframes pulse { 50% { opacity: .35; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>WarEra Country Rankings</h1>
+      <p class="sub">Countries ranked by daily income and other stats. Refreshes automatically.</p>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">Loading…</span></div>
+  </header>
+
+  <div class="notice" id="notice"></div>
+
+  <div class="tools">
+    <input type="search" id="q" placeholder="Filter countries…" aria-label="Filter countries">
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr id="head"></tr></thead>
+      <tbody id="body"><tr><td colspan="9" style="text-align:center;color:var(--muted)">Loading countries…</td></tr></tbody>
+    </table>
+  </div>
+
+  <footer>
+    Data from the public WarEra API. Unofficial fan project. <a href="/api/countries" target="_blank" rel="noopener">Raw data</a>
+  </footer>
+</div>
+
+<script>
+/* ---------- Settings ---------- */
+const REFRESH_MS = 10000;   // matches the 10 s edge cache in the Netlify function
+
+/* ---------- Data helpers ---------- */
+const fmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+const isNum = v => typeof v === "number" && isFinite(v);
+
+// tRPC wraps results as { result: { data: ... } }, sometimes with a further { json: ... } layer.
+function unwrap(payload) {
+  let d = Array.isArray(payload) ? payload[0] : payload;
+  d = d?.result?.data ?? d;
+  return d?.json ?? d;
+}
+function toList(data) {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object") return Object.entries(data).map(([id, c]) => ({ _id: id, ...c }));
+  return [];
+}
+
+// Columns are built from what the API returns: every top-level numeric field, plus any numeric
+// "*income*" field one level down. Income columns are listed first.
+function buildColumns(list) {
+  const keys = new Map(); // key -> label
+  for (const c of list) {
+    for (const [k, v] of Object.entries(c)) {
+      if (k.startsWith("_") || k === "__v") continue;
+      if (isNum(v)) keys.set(k, k);
+      else if (v && typeof v === "object" && !Array.isArray(v)) {
+        for (const [k2, v2] of Object.entries(v)) {
+          if (isNum(v2) && /income/i.test(k2)) keys.set(k + "." + k2, k + "." + k2);
+        }
+      }
+    }
+  }
+  const all = [...keys.keys()];
+  const income = all.filter(k => /income/i.test(k));
+  const rest = all.filter(k => !income.includes(k));
+  return { income, cols: [...income, ...rest].slice(0, 8) };
+}
+const get = (c, path) => path.split(".").reduce((o, k) => o?.[k], c);
+const pretty = k => k.replace(/\./g, " · ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, s => s.toUpperCase());
+
+/* ---------- State & render ---------- */
+let rows = [], cols = [], incomeCols = [], sortKey = null, sortDir = -1, filter = "";
+
+function render() {
+  const head = document.getElementById("head");
+  head.innerHTML = '<th>#</th><th><button data-k="name">Country</button></th>' +
+    cols.map(k => `<th class="${k === sortKey ? "sorted" : ""}"><button data-k="${k}">${pretty(k)}${k === sortKey ? (sortDir < 0 ? " ▼" : " ▲") : ""}</button></th>`).join("");
+  const list = rows
+    .filter(c => !filter || (c.name || "").toLowerCase().includes(filter))
+    .sort((a, b) => {
+      const x = sortKey === "name" ? (a.name || "") : get(a, sortKey);
+      const y = sortKey === "name" ? (b.name || "") : get(b, sortKey);
+      if (typeof x === "string" || typeof y === "string") return String(x ?? "").localeCompare(String(y ?? "")) * -sortDir;
+      return ((y ?? -Infinity) - (x ?? -Infinity)) * -sortDir * -1 * -1;
+    });
+  document.getElementById("body").innerHTML = list.map((c, i) =>
+    `<tr><td class="rank">${i + 1}</td><td>${esc(c.name || c.code || c._id)}</td>` +
+    cols.map(k => { const v = get(c, k); return `<td class="${incomeCols.includes(k) ? "income" : ""}">${isNum(v) ? fmt.format(v) : "—"}</td>`; }).join("") + "</tr>"
+  ).join("");
+}
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+document.getElementById("head").addEventListener("click", e => {
+  const k = e.target.closest("button")?.dataset.k; if (!k) return;
+  if (k === sortKey) sortDir *= -1; else { sortKey = k; sortDir = -1; }
+  render();
+});
+document.getElementById("q").addEventListener("input", e => { filter = e.target.value.trim().toLowerCase(); render(); });
+
+/* ---------- Loading ---------- */
+const dot = document.getElementById("dot"), statusEl = document.getElementById("status"), notice = document.getElementById("notice");
+
+async function load() {
+  try {
+    const res = await fetch("/api/countries", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const list = toList(unwrap(await res.json()));
+    if (!list.length) throw new Error("No countries in response");
+    rows = list;
+    const built = buildColumns(list);
+    cols = built.cols; incomeCols = built.income;
+    if (!sortKey || (sortKey !== "name" && !cols.includes(sortKey))) sortKey = incomeCols[0] || cols[0];
+    notice.style.display = incomeCols.length ? "none" : "block";
+    if (!incomeCols.length) notice.textContent = "The API response has no daily income field, so countries are sorted by another stat. Open Raw data below to see exactly what the API returns.";
+    render();
+    dot.className = "dot live";
+    statusEl.textContent = "Live · updated " + new Date().toLocaleTimeString("en-GB");
+  } catch (err) {
+    dot.className = "dot err";
+    statusEl.textContent = "Update failed (" + err.message + ") · retrying";
+  }
+}
+load();
+setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
