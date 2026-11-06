@@ -10,7 +10,7 @@
 <style>
   /* Layout: one dense ledger table under a slim header, like a treasury register. */
   :root {
-    --bg: #312338;
+    --bg: #0f1412;
     --panel: #161d1a;
     --line: #26312c;
     --fg: #e6ebe7;
@@ -38,7 +38,9 @@
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .seg button { background: var(--panel); color: var(--muted); border: 0; padding: 8px 12px; font: 500 13px var(--body); cursor: pointer; }
   .seg button[aria-pressed=true] { background: #25302b; color: var(--gold); }
-  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+  /* No overflow on desktop: any overflow value turns this box into a scroll container and breaks the sticky header. */
+  .scroll { border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+  @media (max-width: 1100px) { .scroll { overflow-x: auto; } }
   table { border-collapse: collapse; width: 100%; }
   th, td { padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
   th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2), th:nth-child(3), td:nth-child(3) { text-align: left; }
