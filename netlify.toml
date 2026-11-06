@@ -8,3 +8,8 @@
   from = "/api/countries"
   to = "/.netlify/functions/countries"
   status = 200
+
+[[redirects]]
+  from = "/api/trpc/:proc"
+  to = "/.netlify/functions/trpc?proc=:proc"
+  status = 200
