@@ -50,6 +50,9 @@
   th.sorted { color: var(--gold); }
   td { font: 13px var(--mono); font-variant-numeric: tabular-nums; }
   td.name { font: 500 14px var(--body); }
+  td.name a { color: var(--fg); text-decoration: none; }
+  td.name a:hover { color: var(--gold); text-decoration: underline; }
+  td.name a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   td.gov { font: 13px var(--body); color: var(--muted); }
   td.rank { color: var(--muted); width: 44px; }
   td.total { color: var(--gold); font-weight: 500; }
@@ -138,6 +141,7 @@ function toList(data) {
 
 /* ---------- State & render ---------- */
 let rows = [], sortKey = "total", sortDir = -1, filter = "", mult = 24;
+try { if (localStorage.getItem("mult") === "1") mult = 1; } catch (e) {}
 
 function value(col, c) {
   const v = col.get(c);
@@ -169,6 +173,7 @@ function render() {
   document.getElementById("body").innerHTML = list.map((c, i) =>
     `<tr><td class="rank">${i + 1}</td>` + COLUMNS.map(col => {
       const v = value(col, c);
+      if (col.key === "name") return `<td class="name"><a href="country.html?c=${encodeURIComponent(c._id)}">${esc(v)}</a></td>`;
       if (col.kind === "text") return `<td class="${col.cls}">${esc(v)}</td>`;
       const cls = [col.cls || "", isNum(v) && v < 0 ? "neg" : "", isNum(v) && v === 0 ? "zero" : ""].join(" ");
       return `<td class="${cls}">${fmtCell(col, v)}</td>`;
@@ -186,10 +191,13 @@ document.getElementById("q").addEventListener("input", e => { filter = e.target.
 
 function setMult(m) {
   mult = m;
+  try { localStorage.setItem("mult", String(m)); } catch (e) {}
   document.getElementById("perDay").setAttribute("aria-pressed", m === 24);
   document.getElementById("perHour").setAttribute("aria-pressed", m === 1);
   render();
 }
+document.getElementById("perDay").setAttribute("aria-pressed", mult === 24);
+document.getElementById("perHour").setAttribute("aria-pressed", mult === 1);
 document.getElementById("perDay").addEventListener("click", () => setMult(24));
 document.getElementById("perHour").addEventListener("click", () => setMult(1));
 
