@@ -71,7 +71,7 @@
   <header>
     <div>
       <h1>WarEra Country Rankings</h1>
-      <p class="sub">Countries ranked by daily income, with the income broken down by source. Refreshes automatically.</p>
+      <p class="sub">Countries ranked by daily income, with the income broken down by source. Refreshes every minute.</p>
     </div>
     <div class="status"><span class="dot" id="dot"></span><span id="status">Loading…</span></div>
   </header>
@@ -98,7 +98,7 @@
 
 <script>
 /* ---------- Settings ---------- */
-const REFRESH_MS = 10000;   // matches the 10 s edge cache in the Netlify function
+const REFRESH_MS = 60000;   // once a minute; the server caches the data for 60 s anyway
 
 const GOV = {
   republic: "Republic", nationalistState: "Nationalist State", homelandFront: "Homeland Front",

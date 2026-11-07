@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WarEra Country Details</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: header + summary strip, then two ledger tables (core and conquered regions). */
+  :root {
+    --bg: #0f1412;
+    --panel: #161d1a;
+    --line: #26312c;
+    --fg: #e6ebe7;
+    --muted: #8a9890;
+    --gold: #d9a73a;
+    --good: #5fbf8a;
+    --bad: #e0705f;
+    --display: "Bitter", Georgia, serif;
+    --body: "IBM Plex Sans", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--body); }
+  .wrap { max-width: 1600px; margin: 0 auto; padding: 20px 16px 48px; }
+  a { color: inherit; }
+  .back { color: var(--muted); text-decoration: none; font-size: 13px; }
+  .back:hover { color: var(--gold); }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 8px 0 16px; }
+  h1 { font: 700 30px/1.1 var(--display); margin: 0; }
+  h2 { font: 700 18px/1.2 var(--display); margin: 28px 0 4px; }
+  .sub { color: var(--muted); margin: 4px 0 0; }
+  .status { font: 12px var(--mono); color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--good); }
+  .dot.err { background: var(--bad); }
+  .tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .seg button { background: var(--panel); color: var(--muted); border: 0; padding: 8px 12px; font: 500 13px var(--body); cursor: pointer; }
+  .seg button[aria-pressed=true] { background: #25302b; color: var(--gold); }
+  .seg button:focus-visible, th button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .tile { background: var(--panel); padding: 12px 14px; min-width: 0; }
+  .tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .tile .v { font: 500 22px/1.3 var(--mono); font-variant-numeric: tabular-nums; }
+  .tile .v.gold { color: var(--gold); }
+  .tile .v.txt { font: 500 18px/1.6 var(--body); }
+  .tile .s { font-size: 12px; color: var(--muted); }
+  .sources { margin: 10px 0 0; color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+  .sources b { color: var(--fg); font: 500 13px var(--mono); }
+  .sources b.neg { color: var(--bad); }
+
+  .scroll { border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+  @media (max-width: 1100px) { .scroll { overflow-x: auto; } }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child, th.t, td.t { text-align: left; }
+  th { position: sticky; top: 0; background: #1b2420; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: normal; vertical-align: bottom; line-height: 1.25; }
+  th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; text-align: inherit; }
+  th button:hover { color: var(--fg); }
+  th.sorted { color: var(--gold); }
+  td { font: 13px var(--mono); font-variant-numeric: tabular-nums; }
+  td.name { font: 500 14px var(--body); }
+  td.txt { font: 13px var(--body); color: var(--muted); }
+  td.rank { color: var(--muted); width: 40px; }
+  td.total { color: var(--gold); font-weight: 500; }
+  td.neg { color: var(--bad); }
+  td.zero { color: #56635c; }
+  tbody tr:hover { background: #1b2420; }
+  tr.sum td { font-weight: 500; border-top: 1px solid var(--muted); border-bottom: 0; background: #1b2420; }
+  .empty { padding: 18px 12px; color: var(--muted); }
+  .note { margin-top: 18px; color: var(--muted); font-size: 12px; max-width: 90ch; }
+  .msg { padding: 40px 0; color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) { .dot.live { animation: pulse 2s infinite; } }
+  @keyframes pulse { 50% { opacity: .35; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← All countries</a>
+  <header>
+    <div>
+      <h1 id="title">Loading…</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">Loading…</span></div>
+  </header>
+
+  <div id="content" hidden>
+    <div class="tools">
+      <div class="seg" role="group" aria-label="Income period">
+        <button type="button" id="perDay" aria-pressed="true">Per day</button>
+        <button type="button" id="perHour" aria-pressed="false">Per hour</button>
+      </div>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+    <p class="sources" id="sources"></p>
+
+    <h2 id="coreTitle">Core regions</h2>
+    <p class="sub">Regions this country owned from the start. Gold is each region's own income.</p>
+    <div class="scroll" id="coreBox"></div>
+
+    <h2 id="conqTitle">Conquered regions</h2>
+    <p class="sub">Regions this country holds that originally belonged to another country.</p>
+    <div class="scroll" id="conqBox"></div>
+
+    <p class="note">Figures are live hourly values from the public WarEra API (Per day multiplies them by 24). Employee tax changes with wages paid, so region figures can differ slightly from the country total shown on the ranking page. Unofficial fan project.</p>
+  </div>
+  <p class="msg" id="msg" hidden></p>
+</div>
+
+<script>
+const REFRESH_MS = 60000;   // once a minute; the server caches the data for 60 s anyway
+const GOV = {
+  republic: "Republic", nationalistState: "Nationalist State", homelandFront: "Homeland Front",
+  federation: "Federation", plutocracy: "Plutocracy", autocracy: "Autocracy", mercenaryState: "Mercenary State",
+};
+
+const isNum = v => typeof v === "number" && isFinite(v);
+const nf0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const humanize = s => s ? String(s).replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, ch => ch.toUpperCase()) : "—";
+const $ = id => document.getElementById(id);
+
+function unwrap(p) { let d = Array.isArray(p) ? p[0] : p; d = d?.result?.data ?? d; return d?.json ?? d; }
+async function getJSON(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return unwrap(await res.json());
+}
+
+const id = new URLSearchParams(location.search).get("c");
+let mult = 24;
+try { if (localStorage.getItem("mult") === "1") mult = 1; } catch (e) {}
+let country = null, byId = {}, coreRegions = [], conqRegions = [];
+let sortKey = "total", sortDir = -1;
+
+/* ---------- Columns ---------- */
+const COLS = [
+  { key: "name",  label: "Region", get: r => r.name, kind: "text", cls: "name" },
+  { key: "res",   label: "Resource", get: r => humanize(r.strategicResource), kind: "text", cls: "txt" },
+  { key: "owner", label: "Original owner", get: r => byId[r.initialCountry]?.name || "—", kind: "text", cls: "txt", conqOnly: true },
+  { key: "total", label: "Daily income", get: r => r.income?.total, inc: true, cls: "total" },
+  { key: "dev",   label: "Development", get: r => r.income?.development, inc: true },
+  { key: "sres",  label: "Strategic resources", get: r => r.income?.strategicResourcesBonus, inc: true },
+  { key: "emp",   label: "Employee tax", get: r => r.income?.employeeIncomeTax, inc: true },
+  { key: "mgr",   label: "Manager tax", get: r => r.income?.managerIncomeTax, inc: true },
+  { key: "govb",  label: "Gov. bonus", get: r => r.income?.govType, inc: true },
+  { key: "comp",  label: "Companies", get: r => r.companyCount },
+  { key: "work",  label: "Employees", get: r => r.employeeCount },
+];
+const val = (col, r) => { const v = col.get(r); return col.inc && isNum(v) ? v * mult : v; };
+
+function tableHTML(list, conquered) {
+  if (!list.length) return '<div class="empty">None.</div>';
+  const cols = COLS.filter(c => !c.conqOnly || conquered);
+  const sc = cols.find(c => c.key === sortKey) || cols.find(c => c.key === "total");
+  const sorted = [...list].sort((a, b) => {
+    const x = val(sc, a), y = val(sc, b);
+    if (sc.kind === "text") return String(x ?? "").localeCompare(String(y ?? "")) * sortDir;
+    const xv = isNum(x) ? x : -Infinity, yv = isNum(y) ? y : -Infinity;
+    return xv === yv ? 0 : (xv < yv ? 1 : -1) * -sortDir;
+  });
+  const head = "<th>#</th>" + cols.map(c => {
+    const on = c.key === sc.key;
+    const label = c.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : c.label;
+    return `<th class="${on ? "sorted" : ""}${c.kind === "text" ? " t" : ""}"><button type="button" data-k="${c.key}">${label}${on ? (sortDir < 0 ? " ▼" : " ▲") : ""}</button></th>`;
+  }).join("");
+  const cell = (c, v) => {
+    if (c.kind === "text") return `<td class="${c.cls} t">${esc(v)}</td>`;
+    const cls = [c.cls || "", isNum(v) && v < 0 ? "neg" : "", isNum(v) && v === 0 ? "zero" : ""].join(" ");
+    return `<td class="${cls}">${isNum(v) ? nf0.format(v) : "—"}</td>`;
+  };
+  const body = sorted.map((r, i) => `<tr><td class="rank">${i + 1}</td>` + cols.map(c => cell(c, val(c, r))).join("") + "</tr>").join("");
+  const sum = c => c.kind === "text" ? "" : list.reduce((t, r) => t + (val(c, r) || 0), 0);
+  const foot = `<tr class="sum"><td></td>` + cols.map((c, i) => i === 0 ? `<td class="name">Total</td>` : cell(c, c.kind === "text" ? "" : sum(c))).join("") + "</tr>";
+  return `<table><thead><tr>${head}</tr></thead><tbody>${body}${foot}</tbody></table>`;
+}
+
+/* ---------- Render ---------- */
+function render() {
+  const all = [...coreRegions, ...conqRegions];
+  const inc = k => (country.income?.[k] ?? 0) * mult;
+  const sumOf = k => all.reduce((t, r) => t + (r[k] || 0), 0);
+  document.title = country.name + " · WarEra Country Details";
+  $("title").textContent = country.name;
+  $("sub").textContent = (GOV[country.govType] || "Provisional") + " · " + nf0.format(country.currentPopulation ?? 0) + " citizens";
+
+  const tile = (k, v, cls, s) => `<div class="tile"><div class="k">${k}</div><div class="v ${cls || ""}">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
+  $("tiles").innerHTML =
+    tile(mult === 24 ? "Daily income" : "Hourly income", nf0.format(inc("total")), "gold") +
+    tile("Regions", nf0.format(all.length), "", coreRegions.length + " core · " + conqRegions.length + " conquered") +
+    tile("Companies", nf0.format(sumOf("companyCount")), "") +
+    tile("Employees", nf0.format(sumOf("employeeCount")), "");
+
+  const src = [["Development", "development"], ["Strategic resources", "strategicResourcesBonus"], ["Employee tax", "employeeIncomeTax"], ["Manager tax", "managerIncomeTax"], ["Gov. bonus", "govType"]];
+  $("sources").innerHTML = "Income by source: " + src.map(([l, k]) => `<span>${l} <b class="${inc(k) < 0 ? "neg" : ""}">${nf0.format(inc(k))}</b></span>`).join("");
+
+  $("coreTitle").textContent = "Core regions (" + coreRegions.length + ")";
+  $("conqTitle").textContent = "Conquered regions (" + conqRegions.length + ")";
+  $("coreBox").innerHTML = tableHTML(coreRegions, false);
+  $("conqBox").innerHTML = tableHTML(conqRegions, true);
+}
+
+document.addEventListener("click", e => {
+  const k = e.target.closest("th button")?.dataset.k; if (!k) return;
+  if (k === sortKey) sortDir *= -1;
+  else { sortKey = k; sortDir = COLS.find(c => c.key === k).kind === "text" ? 1 : -1; }
+  render();
+});
+function setMult(m) {
+  mult = m;
+  try { localStorage.setItem("mult", String(m)); } catch (e) {}
+  $("perDay").setAttribute("aria-pressed", m === 24);
+  $("perHour").setAttribute("aria-pressed", m === 1);
+  if (country) render();
+}
+$("perDay").addEventListener("click", () => setMult(24));
+$("perHour").addEventListener("click", () => setMult(1));
+$("perDay").setAttribute("aria-pressed", mult === 24);
+$("perHour").setAttribute("aria-pressed", mult === 1);
+
+/* ---------- Loading ---------- */
+async function load() {
+  try {
+    const [cl, rg] = await Promise.all([getJSON("/api/countries"), getJSON("/api/trpc/region.getRegionsObject")]);
+    const list = Array.isArray(cl) ? cl : Object.entries(cl).map(([i, c]) => ({ _id: i, ...c }));
+    byId = Object.fromEntries(list.map(c => [c._id, c]));
+    country = byId[id];
+    if (!country) { $("title").textContent = "Country not found"; $("msg").textContent = "No country with this id. Go back to the ranking and pick one."; $("msg").hidden = false; $("content").hidden = true; return; }
+    const regions = Array.isArray(rg) ? rg : Object.values(rg);
+    coreRegions = regions.filter(r => r.country === id && r.initialCountry === id);
+    conqRegions = regions.filter(r => r.country === id && r.initialCountry !== id);
+    $("content").hidden = false; $("msg").hidden = true;
+    render();
+    $("dot").className = "dot live";
+    $("status").textContent = "Live · updated " + new Date().toLocaleTimeString("en-GB");
+  } catch (err) {
+    $("dot").className = "dot err";
+    $("status").textContent = "Update failed (" + err.message + ") · retrying";
+  }
+}
+load();
+setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
