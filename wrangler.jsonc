@@ -1,0 +1,12 @@
+{
+  // The name must match the project name shown in Cloudflare's setup screen.
+  "name": "warera-rankings",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    // Only /api/* runs the Worker code. Pages and files are served as free static assets.
+    "run_worker_first": ["/api/*"]
+  }
+}
