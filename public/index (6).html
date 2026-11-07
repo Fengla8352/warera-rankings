@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WarEra Country Rankings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one dense ledger table under a slim header, like a treasury register. */
+  :root {
+    --bg: #0d1219;
+    --panel: #141b26;
+    --line: #253041;
+    --fg: #e6ebf2;
+    --muted: #8793a6;
+    --gold: #d9a73a;
+    --good: #4aa8e0;
+    --bad: #e0705f;
+    --display: "Bitter", Georgia, serif;
+    --body: "IBM Plex Sans", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--body); }
+  .wrap { max-width: 1600px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  h1 { font: 700 28px/1.1 var(--display); margin: 0; letter-spacing: .2px; }
+  .sub { color: var(--muted); margin: 4px 0 0; }
+  .status { font: 12px var(--mono); color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--good); }
+  .dot.err { background: var(--bad); }
+  .tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+  input[type=search] { background: var(--panel); border: 1px solid var(--line); color: var(--fg); padding: 8px 10px; border-radius: 4px; min-width: 220px; font: inherit; }
+  input[type=search]:focus-visible, th button:focus-visible, .seg button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .seg button { background: var(--panel); color: var(--muted); border: 0; padding: 8px 12px; font: 500 13px var(--body); cursor: pointer; }
+  .seg button[aria-pressed=true] { background: #223049; color: var(--gold); }
+  /* No overflow on desktop: any overflow value turns this box into a scroll container and breaks the sticky header. */
+  .scroll { border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+  @media (max-width: 1100px) { .scroll { overflow-x: auto; } }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2), th:nth-child(3), td:nth-child(3) { text-align: left; }
+  th { position: sticky; top: 0; background: #1a2331; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: normal; vertical-align: bottom; line-height: 1.25; }
+  th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; text-align: inherit; }
+  th button:hover { color: var(--fg); }
+  th.sorted { color: var(--gold); }
+  td { font: 13px var(--mono); font-variant-numeric: tabular-nums; }
+  td.name { font: 500 14px var(--body); }
+  td.name a { color: var(--fg); text-decoration: none; }
+  td.name a:hover { color: var(--gold); text-decoration: underline; }
+  td.name a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  td.gov { font: 13px var(--body); color: var(--muted); }
+  td.rank { color: var(--muted); width: 44px; }
+  td.total { color: var(--gold); font-weight: 500; }
+  td.neg { color: var(--bad); }
+  td.zero { color: #55627a; }
+  tbody tr:hover { background: #1a2331; }
+  tbody tr:last-child td { border-bottom: 0; }
+  footer { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 80ch; }
+  footer a { color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) { .dot.live { animation: pulse 2s infinite; } }
+  @keyframes pulse { 50% { opacity: .35; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>WarEra Country Rankings</h1>
+      <p class="sub">Countries ranked by daily income, with the income broken down by source. Refreshes every minute.</p>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">Loading…</span></div>
+  </header>
+
+  <div class="tools">
+    <input type="search" id="q" placeholder="Filter countries…" aria-label="Filter countries">
+    <div class="seg" role="group" aria-label="Income period">
+      <button type="button" id="perDay" aria-pressed="true">Per day</button>
+      <button type="button" id="perHour" aria-pressed="false">Per hour</button>
+    </div>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr id="head"></tr></thead>
+      <tbody id="body"><tr><td colspan="14" style="text-align:center;color:var(--muted)">Loading countries…</td></tr></tbody>
+    </table>
+  </div>
+
+  <footer>
+    Income figures come from the public WarEra API (hourly values). Per day multiplies them by 24. Unofficial fan project. <a href="/api/countries" target="_blank" rel="noopener">Raw data</a>
+  </footer>
+</div>
+
+<script>
+/* ---------- Settings ---------- */
+const REFRESH_MS = 60000;   // once a minute; the server caches the data for 60 s anyway
+
+const GOV = {
+  republic: "Republic", nationalistState: "Nationalist State", homelandFront: "Homeland Front",
+  federation: "Federation", plutocracy: "Plutocracy", autocracy: "Autocracy", mercenaryState: "Mercenary State",
+};
+
+/* Column definitions. "inc" columns are income amounts, scaled by the per day / per hour toggle. */
+const COLUMNS = [
+  { key: "name",  label: "Country", get: c => c.name || c.code || c._id, kind: "text", cls: "name" },
+  { key: "gov",   label: "Government", get: c => GOV[c.govType] || "Provisional", kind: "text", cls: "gov" },
+  { key: "total", label: "Daily income", get: c => c.income?.total, inc: true, cls: "total" },
+  { key: "dev",   label: "Development", get: c => c.income?.development, inc: true },
+  { key: "res",   label: "Strategic resources", get: c => c.income?.strategicResourcesBonus, inc: true },
+  { key: "emp",   label: "Employee tax", get: c => c.income?.employeeIncomeTax, inc: true },
+  { key: "mgr",   label: "Manager tax", get: c => c.income?.managerIncomeTax, inc: true },
+  { key: "govb",  label: "Gov. bonus", get: c => c.income?.govType, inc: true },
+  { key: "tinc",  label: "Income tax %", get: c => c.taxes?.income },
+  { key: "tmgr",  label: "Manager tax %", get: c => c.taxes?.manager },
+  { key: "tmkt",  label: "Market tax %", get: c => c.taxes?.market },
+  { key: "pop",   label: "Population", get: c => c.currentPopulation },
+  { key: "cdev",  label: "Country development", get: c => c.currentDevelopment },
+];
+
+/* ---------- Helpers ---------- */
+const isNum = v => typeof v === "number" && isFinite(v);
+const nf0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const nf2 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+function unwrap(payload) {
+  let d = Array.isArray(payload) ? payload[0] : payload;
+  d = d?.result?.data ?? d;
+  return d?.json ?? d;
+}
+function toList(data) {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object") return Object.entries(data).map(([id, c]) => ({ _id: id, ...c }));
+  return [];
+}
+
+/* ---------- State & render ---------- */
+let rows = [], sortKey = "total", sortDir = -1, filter = "", mult = 24;
+try { if (localStorage.getItem("mult") === "1") mult = 1; } catch (e) {}
+
+function value(col, c) {
+  const v = col.get(c);
+  return col.inc && isNum(v) ? v * mult : v;
+}
+function fmtCell(col, v) {
+  if (!isNum(v)) return "—";
+  if (col.inc) return nf0.format(v);
+  return nf2.format(v);
+}
+
+function render() {
+  document.getElementById("head").innerHTML = '<th>#</th>' + COLUMNS.map(col => {
+    const label = col.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : col.label;
+    const sorted = col.key === sortKey;
+    return `<th class="${sorted ? "sorted" : ""}"><button type="button" data-k="${col.key}">${label}${sorted ? (sortDir < 0 ? " ▼" : " ▲") : ""}</button></th>`;
+  }).join("");
+
+  const sc = COLUMNS.find(c => c.key === sortKey);
+  const list = rows
+    .filter(c => !filter || String(c.name || "").toLowerCase().includes(filter))
+    .sort((a, b) => {
+      const x = value(sc, a), y = value(sc, b);
+      if (sc.kind === "text") return String(x ?? "").localeCompare(String(y ?? "")) * sortDir;
+      const xv = isNum(x) ? x : -Infinity, yv = isNum(y) ? y : -Infinity;
+      return xv === yv ? 0 : (xv < yv ? 1 : -1) * -sortDir;
+    });
+
+  document.getElementById("body").innerHTML = list.map((c, i) =>
+    `<tr><td class="rank">${i + 1}</td>` + COLUMNS.map(col => {
+      const v = value(col, c);
+      if (col.key === "name") return `<td class="name"><a href="country.html?c=${encodeURIComponent(c._id)}">${esc(v)}</a></td>`;
+      if (col.kind === "text") return `<td class="${col.cls}">${esc(v)}</td>`;
+      const cls = [col.cls || "", isNum(v) && v < 0 ? "neg" : "", isNum(v) && v === 0 ? "zero" : ""].join(" ");
+      return `<td class="${cls}">${fmtCell(col, v)}</td>`;
+    }).join("") + "</tr>"
+  ).join("");
+}
+
+document.getElementById("head").addEventListener("click", e => {
+  const k = e.target.closest("button")?.dataset.k; if (!k) return;
+  if (k === sortKey) sortDir *= -1;
+  else { sortKey = k; sortDir = COLUMNS.find(c => c.key === k).kind === "text" ? 1 : -1; }
+  render();
+});
+document.getElementById("q").addEventListener("input", e => { filter = e.target.value.trim().toLowerCase(); render(); });
+
+function setMult(m) {
+  mult = m;
+  try { localStorage.setItem("mult", String(m)); } catch (e) {}
+  document.getElementById("perDay").setAttribute("aria-pressed", m === 24);
+  document.getElementById("perHour").setAttribute("aria-pressed", m === 1);
+  render();
+}
+document.getElementById("perDay").setAttribute("aria-pressed", mult === 24);
+document.getElementById("perHour").setAttribute("aria-pressed", mult === 1);
+document.getElementById("perDay").addEventListener("click", () => setMult(24));
+document.getElementById("perHour").addEventListener("click", () => setMult(1));
+
+/* ---------- Loading ---------- */
+const dot = document.getElementById("dot"), statusEl = document.getElementById("status");
+
+async function load() {
+  try {
+    const res = await fetch("/api/countries", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const list = toList(unwrap(await res.json()));
+    if (!list.length) throw new Error("No countries in response");
+    rows = list;
+    render();
+    dot.className = "dot live";
+    statusEl.textContent = "Live · updated " + new Date().toLocaleTimeString("en-GB");
+  } catch (err) {
+    dot.className = "dot err";
+    statusEl.textContent = "Update failed (" + err.message + ") · retrying";
+  }
+}
+load();
+setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>

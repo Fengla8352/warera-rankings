@@ -10,13 +10,13 @@
 <style>
   /* Layout: header + summary strip, then two ledger tables (core and conquered regions). */
   :root {
-    --bg: #0f1412;
-    --panel: #161d1a;
-    --line: #26312c;
-    --fg: #e6ebe7;
-    --muted: #8a9890;
+    --bg: #0d1219;
+    --panel: #141b26;
+    --line: #253041;
+    --fg: #e6ebf2;
+    --muted: #8793a6;
     --gold: #d9a73a;
-    --good: #5fbf8a;
+    --good: #4aa8e0;
     --bad: #e0705f;
     --display: "Bitter", Georgia, serif;
     --body: "IBM Plex Sans", system-ui, sans-serif;
@@ -39,7 +39,7 @@
   .tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .seg button { background: var(--panel); color: var(--muted); border: 0; padding: 8px 12px; font: 500 13px var(--body); cursor: pointer; }
-  .seg button[aria-pressed=true] { background: #25302b; color: var(--gold); }
+  .seg button[aria-pressed=true] { background: #223049; color: var(--gold); }
   .seg button:focus-visible, th button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
@@ -58,7 +58,7 @@
   table { border-collapse: collapse; width: 100%; }
   th, td { padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
   th:first-child, td:first-child, th.t, td.t { text-align: left; }
-  th { position: sticky; top: 0; background: #1b2420; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: normal; vertical-align: bottom; line-height: 1.25; }
+  th { position: sticky; top: 0; background: #1a2331; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: normal; vertical-align: bottom; line-height: 1.25; }
   th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; text-align: inherit; }
   th button:hover { color: var(--fg); }
   th.sorted { color: var(--gold); }
@@ -68,9 +68,9 @@
   td.rank { color: var(--muted); width: 40px; }
   td.total { color: var(--gold); font-weight: 500; }
   td.neg { color: var(--bad); }
-  td.zero { color: #56635c; }
-  tbody tr:hover { background: #1b2420; }
-  tr.sum td { font-weight: 500; border-top: 1px solid var(--muted); border-bottom: 0; background: #1b2420; }
+  td.zero { color: #55627a; }
+  tbody tr:hover { background: #1a2331; }
+  tr.sum td { font-weight: 500; border-top: 1px solid var(--muted); border-bottom: 0; background: #1a2331; }
   .empty { padding: 18px 12px; color: var(--muted); }
   .note { margin-top: 18px; color: var(--muted); font-size: 12px; max-width: 90ch; }
   .msg { padding: 40px 0; color: var(--muted); }
@@ -108,7 +108,11 @@
     <p class="sub">Regions this country holds that originally belonged to another country.</p>
     <div class="scroll" id="conqBox"></div>
 
-    <p class="note">Figures are live hourly values from the public WarEra API (Per day multiplies them by 24). Employee tax changes with wages paid, so region figures can differ slightly from the country total shown on the ranking page. Unofficial fan project.</p>
+    <h2 id="lostTitle">Lost regions</h2>
+    <p class="sub">Regions that originally belonged to this country and are now held by another one, ranked by the income they produce. The last column is an estimate of the 10% income tax share the original owner receives.</p>
+    <div class="scroll" id="lostBox"></div>
+
+    <p class="note">Figures are live hourly values from the public WarEra API (Per day multiplies them by 24). Employee tax changes with wages paid, so region figures can differ slightly from the country total shown on the ranking page. The tax share for lost regions is calculated here as 10% of the region's income tax (the patch notes give the original owner 10%), so treat it as an estimate. Unofficial fan project.</p>
   </div>
   <p class="msg" id="msg" hidden></p>
 </div>
@@ -136,28 +140,35 @@ async function getJSON(url) {
 const id = new URLSearchParams(location.search).get("c");
 let mult = 24;
 try { if (localStorage.getItem("mult") === "1") mult = 1; } catch (e) {}
-let country = null, byId = {}, coreRegions = [], conqRegions = [];
+let country = null, byId = {}, coreRegions = [], conqRegions = [], lostRegions = [];
 let sortKey = "total", sortDir = -1;
 
 /* ---------- Columns ---------- */
+const ALL = ["core", "conq", "lost"];
+/* Estimated share of a lost region's income tax that goes to its original owner. The patch notes give the
+   original owner 10% of the income tax. The tax shown for the region is what the holder keeps (about 90%),
+   so 10% of the whole tax is (employee tax + manager tax) / 9. This is an estimate, not a value from the API. */
+const taxShare = r => ((r.income?.employeeIncomeTax || 0) + (r.income?.managerIncomeTax || 0)) / 9;
 const COLS = [
-  { key: "name",  label: "Region", get: r => r.name, kind: "text", cls: "name" },
-  { key: "res",   label: "Resource", get: r => humanize(r.strategicResource), kind: "text", cls: "txt" },
-  { key: "owner", label: "Original owner", get: r => byId[r.initialCountry]?.name || "—", kind: "text", cls: "txt", conqOnly: true },
-  { key: "total", label: "Daily income", get: r => r.income?.total, inc: true, cls: "total" },
-  { key: "dev",   label: "Development", get: r => r.income?.development, inc: true },
-  { key: "sres",  label: "Strategic resources", get: r => r.income?.strategicResourcesBonus, inc: true },
-  { key: "emp",   label: "Employee tax", get: r => r.income?.employeeIncomeTax, inc: true },
-  { key: "mgr",   label: "Manager tax", get: r => r.income?.managerIncomeTax, inc: true },
-  { key: "govb",  label: "Gov. bonus", get: r => r.income?.govType, inc: true },
-  { key: "comp",  label: "Companies", get: r => r.companyCount },
-  { key: "work",  label: "Employees", get: r => r.employeeCount },
+  { key: "name",  label: "Region", get: r => r.name, kind: "text", cls: "name", modes: ALL },
+  { key: "res",   label: "Resource", get: r => humanize(r.strategicResource), kind: "text", cls: "txt", modes: ALL },
+  { key: "owner", label: "Original owner", get: r => byId[r.initialCountry]?.name || "—", kind: "text", cls: "txt", modes: ["conq"] },
+  { key: "holder", label: "Now held by", get: r => byId[r.country]?.name || "—", kind: "text", cls: "txt", modes: ["lost"] },
+  { key: "total", label: "Daily income", get: r => r.income?.total, inc: true, cls: "total", modes: ALL },
+  { key: "dev",   label: "Development", get: r => r.income?.development, inc: true, modes: ["core", "conq"] },
+  { key: "sres",  label: "Strategic resources", get: r => r.income?.strategicResourcesBonus, inc: true, modes: ["core", "conq"] },
+  { key: "emp",   label: "Employee tax", get: r => r.income?.employeeIncomeTax, inc: true, modes: ALL },
+  { key: "mgr",   label: "Manager tax", get: r => r.income?.managerIncomeTax, inc: true, modes: ALL },
+  { key: "govb",  label: "Gov. bonus", get: r => r.income?.govType, inc: true, modes: ["core", "conq"] },
+  { key: "share", label: "Est. tax share to this country", get: r => taxShare(r), inc: true, cls: "total", modes: ["lost"] },
+  { key: "comp",  label: "Companies", get: r => r.companyCount, modes: ALL },
+  { key: "work",  label: "Employees", get: r => r.employeeCount, modes: ALL },
 ];
 const val = (col, r) => { const v = col.get(r); return col.inc && isNum(v) ? v * mult : v; };
 
-function tableHTML(list, conquered) {
+function tableHTML(list, mode) {
   if (!list.length) return '<div class="empty">None.</div>';
-  const cols = COLS.filter(c => !c.conqOnly || conquered);
+  const cols = COLS.filter(c => c.modes.includes(mode));
   const sc = cols.find(c => c.key === sortKey) || cols.find(c => c.key === "total");
   const sorted = [...list].sort((a, b) => {
     const x = val(sc, a), y = val(sc, b);
@@ -167,7 +178,7 @@ function tableHTML(list, conquered) {
   });
   const head = "<th>#</th>" + cols.map(c => {
     const on = c.key === sc.key;
-    const label = c.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : c.label;
+    const label = c.key === "total" ? (mode === "lost" ? "Region income" : mult === 24 ? "Daily income" : "Hourly income") : c.label;
     return `<th class="${on ? "sorted" : ""}${c.kind === "text" ? " t" : ""}"><button type="button" data-k="${c.key}">${label}${on ? (sortDir < 0 ? " ▼" : " ▲") : ""}</button></th>`;
   }).join("");
   const cell = (c, v) => {
@@ -193,7 +204,8 @@ function render() {
   const tile = (k, v, cls, s) => `<div class="tile"><div class="k">${k}</div><div class="v ${cls || ""}">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
   $("tiles").innerHTML =
     tile(mult === 24 ? "Daily income" : "Hourly income", nf0.format(inc("total")), "gold") +
-    tile("Regions", nf0.format(all.length), "", coreRegions.length + " core · " + conqRegions.length + " conquered") +
+    tile("Regions held", nf0.format(all.length), "", coreRegions.length + " core · " + conqRegions.length + " conquered") +
+    tile("Regions lost", nf0.format(lostRegions.length), "", lostRegions.length ? "≈ " + nf0.format(lostRegions.reduce((t, r) => t + taxShare(r), 0) * mult) + (mult === 24 ? " gold per day" : " gold per hour") + " tax share" : "") +
     tile("Companies", nf0.format(sumOf("companyCount")), "") +
     tile("Employees", nf0.format(sumOf("employeeCount")), "");
 
@@ -202,8 +214,10 @@ function render() {
 
   $("coreTitle").textContent = "Core regions (" + coreRegions.length + ")";
   $("conqTitle").textContent = "Conquered regions (" + conqRegions.length + ")";
-  $("coreBox").innerHTML = tableHTML(coreRegions, false);
-  $("conqBox").innerHTML = tableHTML(conqRegions, true);
+  $("lostTitle").textContent = "Lost regions (" + lostRegions.length + ")";
+  $("coreBox").innerHTML = tableHTML(coreRegions, "core");
+  $("conqBox").innerHTML = tableHTML(conqRegions, "conq");
+  $("lostBox").innerHTML = tableHTML(lostRegions, "lost");
 }
 
 document.addEventListener("click", e => {
@@ -235,6 +249,7 @@ async function load() {
     const regions = Array.isArray(rg) ? rg : Object.values(rg);
     coreRegions = regions.filter(r => r.country === id && r.initialCountry === id);
     conqRegions = regions.filter(r => r.country === id && r.initialCountry !== id);
+    lostRegions = regions.filter(r => r.initialCountry === id && r.country !== id);
     $("content").hidden = false; $("msg").hidden = true;
     render();
     $("dot").className = "dot live";
