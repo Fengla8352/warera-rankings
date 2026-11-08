@@ -43,7 +43,7 @@
   @media (max-width: 1100px) { .scroll { overflow-x: auto; } }
   table { border-collapse: collapse; width: 100%; }
   th, td { padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2), th:nth-child(3), td:nth-child(3) { text-align: left; }
+  th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2), th.t, td.t { text-align: left; }
   th { position: sticky; top: 0; background: #1a2331; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: normal; vertical-align: bottom; line-height: 1.25; }
   th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; text-align: inherit; }
   th button:hover { color: var(--fg); }
@@ -60,6 +60,13 @@
   td.zero { color: #55627a; }
   tbody tr:hover { background: #1a2331; }
   tbody tr:last-child td { border-bottom: 0; }
+  .crumb { margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
+  .crumb[hidden] { display: none; }
+  .crumb a { color: var(--muted); }
+  .crumb a:hover { color: var(--gold); }
+  .crumb h2 { font: 700 20px/1.2 var(--display); margin: 0; }
+  .crumb span { color: var(--muted); }
+  td.sep { color: var(--muted); font-style: italic; }
   footer { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 80ch; }
   footer a { color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) { .dot.live { animation: pulse 2s infinite; } }
@@ -71,18 +78,24 @@
   <header>
     <div>
       <h1>WarEra Country Rankings</h1>
-      <p class="sub">Countries ranked by daily income, with the income broken down by source. Refreshes every minute.</p>
+      <p class="sub" id="sub">Countries ranked by daily income, with the income broken down by source. Refreshes every minute.</p>
     </div>
     <div class="status"><span class="dot" id="dot"></span><span id="status">Loading…</span></div>
   </header>
 
   <div class="tools">
     <input type="search" id="q" placeholder="Filter countries…" aria-label="Filter countries">
+    <div class="seg" role="group" aria-label="View">
+      <button type="button" id="vCountry" aria-pressed="true">Country</button>
+      <button type="button" id="vAlliance" aria-pressed="false">Alliance</button>
+    </div>
     <div class="seg" role="group" aria-label="Income period">
       <button type="button" id="perDay" aria-pressed="true">Per day</button>
       <button type="button" id="perHour" aria-pressed="false">Per hour</button>
     </div>
   </div>
+
+  <div class="crumb" id="crumb" hidden></div>
 
   <div class="scroll">
     <table>
@@ -143,59 +156,147 @@ function toList(data) {
 
 /* ---------- State & render ---------- */
 let rows = [], sortKey = "total", sortDir = -1, filter = "", mult = 24;
+let view = "country", openId = null, allianceNames = {};
 try { if (localStorage.getItem("mult") === "1") mult = 1; } catch (e) {}
 
-function value(col, c) {
-  const v = col.get(c);
-  return col.inc && isNum(v) ? v * mult : v;
+const NO_ALLIANCE = "none";
+const SHARE = { key: "share", label: "Share of alliance (%)", kind: "num", share: true };
+const col = k => COLUMNS.find(c => c.key === k);
+const MEMBERS = { key: "members", label: "Countries", get: a => a.members.length, kind: "num" };
+const ALLIANCE_NAME = { key: "name", label: "Alliance", get: a => a.name, kind: "text", cls: "name" };
+const ALLIANCE_COLS = [ALLIANCE_NAME, MEMBERS, ...["total", "dev", "res", "emp", "mgr", "govb", "pop", "cdev"].map(col)];
+const sum = (list, f) => list.reduce((t, c) => t + (isNum(f(c)) ? f(c) : 0), 0);
+
+/* Group countries by allianceId; countries without one go into a separate "no alliance" group. */
+function buildAlliances() {
+  const by = new Map();
+  for (const c of rows) {
+    const id = c.allianceId || NO_ALLIANCE;
+    if (!by.has(id)) by.set(id, []);
+    by.get(id).push(c);
+  }
+  return [...by].map(([id, members]) => {
+    members.sort((x, y) => (y.income?.total || 0) - (x.income?.total || 0));
+    let name = allianceNames[id];
+    if (id === NO_ALLIANCE) name = "No alliance";
+    else if (!name) {
+      const top = members.slice(0, 3).map(m => m.name || m.code).join(", ");
+      name = "Alliance of " + top + (members.length > 3 ? " +" + (members.length - 3) : "");
+    }
+    const inc = k => sum(members, m => m.income?.[k]);
+    return {
+      _id: id, name, members, none: id === NO_ALLIANCE,
+      income: { total: inc("total"), development: inc("development"), strategicResourcesBonus: inc("strategicResourcesBonus"),
+                employeeIncomeTax: inc("employeeIncomeTax"), managerIncomeTax: inc("managerIncomeTax"), govType: inc("govType") },
+      currentPopulation: sum(members, m => m.currentPopulation),
+      currentDevelopment: sum(members, m => m.currentDevelopment),
+    };
+  });
 }
-function fmtCell(col, v) {
+
+function value(c, item, group) {
+  if (c.share) { const t = sum(group, m => m.income?.total); const v = item.income?.total; return t && isNum(v) ? v / t * 100 : null; }
+  const v = c.get(item);
+  return c.inc && isNum(v) ? v * mult : v;
+}
+function fmtCell(c, v) {
   if (!isNum(v)) return "—";
-  if (col.inc) return nf0.format(v);
+  if (c.inc) return nf0.format(v);
+  if (c.key === "members") return nf0.format(v);
   return nf2.format(v);
 }
 
-function visibleCols() {
-  return COLUMNS.filter(col => !col.hideIfZero || rows.some(c => (col.get(c) || 0) !== 0));
+function visibleCols(cols, items) {
+  return cols.filter(c => !c.hideIfZero || items.some(i => (c.get(i) || 0) !== 0));
 }
 
-function render() {
-  const cols = visibleCols();
-  if (!cols.some(c => c.key === sortKey)) sortKey = "total";
-  document.getElementById("head").innerHTML = '<th>#</th>' + cols.map(col => {
-    const label = col.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : col.label;
-    const sorted = col.key === sortKey;
-    return `<th class="${sorted ? "sorted" : ""}"><button type="button" data-k="${col.key}">${label}${sorted ? (sortDir < 0 ? " ▼" : " ▲") : ""}</button></th>`;
+/* Draws the table for whichever view is active. */
+function draw(cols, items, group, linkFor) {
+  cols = visibleCols(cols, items);
+  if (!cols.some(c => c.key === sortKey)) { sortKey = "total"; sortDir = -1; }
+  document.getElementById("head").innerHTML = '<th>#</th>' + cols.map(c => {
+    const label = c.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : c.label;
+    const sorted = c.key === sortKey;
+    return `<th class="${sorted ? "sorted" : ""}${c.kind === "text" ? " t" : ""}"><button type="button" data-k="${c.key}">${label}${sorted ? (sortDir < 0 ? " ▼" : " ▲") : ""}</button></th>`;
   }).join("");
 
-  const sc = COLUMNS.find(c => c.key === sortKey);
-  const list = rows
-    .filter(c => !filter || String(c.name || "").toLowerCase().includes(filter))
+  const sc = cols.find(c => c.key === sortKey);
+  const list = items
+    .filter(i => !filter || String(i.name || "").toLowerCase().includes(filter)
+      || (i.members && i.members.some(m => String(m.name || "").toLowerCase().includes(filter))))
     .sort((a, b) => {
-      const x = value(sc, a), y = value(sc, b);
+      if (a.none !== b.none) return a.none ? 1 : -1;          // "No alliance" always last
+      const x = value(sc, a, group), y = value(sc, b, group);
       if (sc.kind === "text") return String(x ?? "").localeCompare(String(y ?? "")) * sortDir;
       const xv = isNum(x) ? x : -Infinity, yv = isNum(y) ? y : -Infinity;
       return xv === yv ? 0 : (xv < yv ? 1 : -1) * -sortDir;
     });
 
-  document.getElementById("body").innerHTML = list.map((c, i) =>
-    `<tr><td class="rank">${i + 1}</td>` + cols.map(col => {
-      const v = value(col, c);
-      if (col.key === "name") return `<td class="name"><a href="country.html?c=${encodeURIComponent(c._id)}">${esc(v)}</a></td>`;
-      if (col.kind === "text") return `<td class="${col.cls}">${esc(v)}</td>`;
-      const cls = [col.cls || "", isNum(v) && v < 0 ? "neg" : "", isNum(v) && v === 0 ? "zero" : ""].join(" ");
-      return `<td class="${cls}">${fmtCell(col, v)}</td>`;
-    }).join("") + "</tr>"
-  ).join("");
+  let rank = 0;
+  document.getElementById("body").innerHTML = list.map(item => {
+    const r = item.none ? "–" : ++rank;
+    return `<tr><td class="rank">${r}</td>` + cols.map(c => {
+      const v = value(c, item, group);
+      if (c.key === "name") return `<td class="name${item.none ? " sep" : ""}"><a href="${linkFor(item)}">${esc(v)}</a></td>`;
+      if (c.kind === "text") return `<td class="${c.cls} t">${esc(v)}</td>`;
+      const cls = [c.cls || "", isNum(v) && v < 0 ? "neg" : "", isNum(v) && v === 0 ? "zero" : ""].join(" ");
+      return `<td class="${cls}">${fmtCell(c, v)}</td>`;
+    }).join("") + "</tr>";
+  }).join("") || `<tr><td colspan="${cols.length + 1}" style="text-align:center;color:var(--muted)">Nothing to show.</td></tr>`;
+}
+
+function render() {
+  const crumb = document.getElementById("crumb");
+  const sub = document.getElementById("sub");
+  for (const [id, v] of [["vCountry", "country"], ["vAlliance", "alliance"]])
+    document.getElementById(id).setAttribute("aria-pressed", view === v);
+  document.getElementById("q").placeholder = view === "alliance" && !openId ? "Filter alliances or members…" : "Filter countries…";
+
+  if (view === "country") {
+    crumb.hidden = true;
+    sub.textContent = "Countries ranked by daily income, with the income broken down by source. Refreshes every minute.";
+    draw(COLUMNS, rows, rows, c => "country.html?c=" + encodeURIComponent(c._id));
+    return;
+  }
+  const groups = buildAlliances();
+  const open = openId && groups.find(g => g._id === openId);
+  if (!open) {
+    openId = null;
+    crumb.hidden = true;
+    sub.textContent = "Alliances ranked by the combined income of their member countries. Click an alliance to see each member.";
+    draw(ALLIANCE_COLS, groups, groups, g => "#alliance/" + encodeURIComponent(g._id));
+    return;
+  }
+  const total = open.income.total * mult;
+  crumb.hidden = false;
+  crumb.innerHTML = `<a href="#alliances">← All alliances</a><h2>${esc(open.name)}</h2><span>${open.members.length} countries · ${nf0.format(total)} ${mult === 24 ? "per day" : "per hour"} combined</span>`;
+  sub.textContent = "Income of each member country, and its share of the alliance total.";
+  const cols = [];
+  for (const c of COLUMNS) { cols.push(c); if (c.key === "total") cols.push(SHARE); }
+  draw(cols, open.members, open.members, c => "country.html?c=" + encodeURIComponent(c._id));
 }
 
 document.getElementById("head").addEventListener("click", e => {
   const k = e.target.closest("button")?.dataset.k; if (!k) return;
   if (k === sortKey) sortDir *= -1;
-  else { sortKey = k; sortDir = COLUMNS.find(c => c.key === k).kind === "text" ? 1 : -1; }
+  else { sortKey = k; sortDir = (col(k) || ALLIANCE_NAME).kind === "text" ? 1 : -1; }
   render();
 });
 document.getElementById("q").addEventListener("input", e => { filter = e.target.value.trim().toLowerCase(); render(); });
+
+/* Routing by URL hash so views can be shared: #alliances and #alliance/<id>. */
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  const m = /^alliance\/(.+)$/.exec(h);
+  const nv = m || h === "alliances" ? "alliance" : "country";
+  const no = m ? m[1] : null;
+  if (nv !== view || no !== openId) { sortKey = "total"; sortDir = -1; }
+  view = nv; openId = no;
+  render();
+}
+document.getElementById("vCountry").addEventListener("click", () => { history.replaceState(null, "", location.pathname + location.search); route(); });
+document.getElementById("vAlliance").addEventListener("click", () => { location.hash = "alliances"; });
+window.addEventListener("hashchange", route);
 
 function setMult(m) {
   mult = m;
@@ -219,7 +320,7 @@ async function load() {
     const list = toList(unwrap(await res.json()));
     if (!list.length) throw new Error("No countries in response");
     rows = list;
-    render();
+    route();
     dot.className = "dot live";
     statusEl.textContent = "Live · updated " + new Date().toLocaleTimeString("en-GB");
   } catch (err) {
@@ -227,7 +328,22 @@ async function load() {
     statusEl.textContent = "Update failed (" + err.message + ") · retrying";
   }
 }
-load();
+/* Alliance names come from a separate endpoint; if it has none, the page labels alliances by their top members. */
+let namesAt = 0;
+async function loadNames() {
+  if (Date.now() - namesAt < 600000) return;
+  namesAt = Date.now();
+  try {
+    const res = await fetch("/api/alliances");
+    if (!res.ok) return;
+    const d = unwrap(await res.json());
+    const next = {};
+    for (const a of d?.alliances || []) next[a._id] = a.name;
+    if (Object.keys(next).length) { allianceNames = next; render(); }
+  } catch (e) { /* keep the fallback labels */ }
+}
+load().then(loadNames);
+setInterval(loadNames, 600000);
 setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 </script>
