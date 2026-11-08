@@ -134,7 +134,6 @@ const COLUMNS = [
   { key: "tmgr",  label: "Manager tax %", get: c => c.taxes?.manager },
   { key: "tmkt",  label: "Market tax %", get: c => c.taxes?.market },
   { key: "pop",   label: "Population", get: c => c.currentPopulation },
-  { key: "cdev",  label: "Country development", get: c => c.currentDevelopment },
 ];
 
 /* ---------- Helpers ---------- */
@@ -164,7 +163,7 @@ const SHARE = { key: "share", label: "Share of alliance (%)", kind: "num", share
 const col = k => COLUMNS.find(c => c.key === k);
 const MEMBERS = { key: "members", label: "Countries", get: a => a.members.length, kind: "num" };
 const ALLIANCE_NAME = { key: "name", label: "Alliance", get: a => a.name, kind: "text", cls: "name" };
-const ALLIANCE_COLS = [ALLIANCE_NAME, MEMBERS, ...["total", "dev", "res", "emp", "mgr", "govb", "pop", "cdev"].map(col)];
+const ALLIANCE_COLS = [ALLIANCE_NAME, MEMBERS, ...["total", "dev", "res", "emp", "mgr", "govb", "pop"].map(col)];
 const sum = (list, f) => list.reduce((t, c) => t + (isNum(f(c)) ? f(c) : 0), 0);
 
 /* Group countries by allianceId; countries without one go into a separate "no alliance" group. */
@@ -189,7 +188,6 @@ function buildAlliances() {
       income: { total: inc("total"), development: inc("development"), strategicResourcesBonus: inc("strategicResourcesBonus"),
                 employeeIncomeTax: inc("employeeIncomeTax"), managerIncomeTax: inc("managerIncomeTax"), govType: inc("govType") },
       currentPopulation: sum(members, m => m.currentPopulation),
-      currentDevelopment: sum(members, m => m.currentDevelopment),
     };
   });
 }
