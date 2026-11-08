@@ -119,9 +119,10 @@
 
 <script>
 const REFRESH_MS = 60000;   // once a minute; the server caches the data for 60 s anyway
+/* Nationalist State and Mercenary State were removed in v0.28; those countries are Provisional again. */
 const GOV = {
-  republic: "Republic", nationalistState: "Nationalist State", homelandFront: "Homeland Front",
-  federation: "Federation", plutocracy: "Plutocracy", autocracy: "Autocracy", mercenaryState: "Mercenary State",
+  republic: "Republic", homelandFront: "Homeland Front",
+  federation: "Federation", plutocracy: "Plutocracy", autocracy: "Autocracy",
 };
 
 const isNum = v => typeof v === "number" && isFinite(v);
@@ -156,7 +157,8 @@ const COLS = [
   { key: "holder", label: "Now held by", get: r => byId[r.country]?.name || "—", kind: "text", cls: "txt", modes: ["lost"] },
   { key: "total", label: "Daily income", get: r => r.income?.total, inc: true, cls: "total", modes: ALL },
   { key: "dev",   label: "Development", get: r => r.income?.development, inc: true, modes: ["core", "conq"] },
-  { key: "sres",  label: "Strategic resources", get: r => r.income?.strategicResourcesBonus, inc: true, modes: ["core", "conq"] },
+  /* Strategic resources stopped paying money in v0.28, so this column hides itself when every value is 0. */
+  { key: "sres",  label: "Strategic resources", get: r => r.income?.strategicResourcesBonus, inc: true, modes: ["core", "conq"], hideIfZero: true },
   { key: "emp",   label: "Employee tax", get: r => r.income?.employeeIncomeTax, inc: true, modes: ALL },
   { key: "mgr",   label: "Manager tax", get: r => r.income?.managerIncomeTax, inc: true, modes: ALL },
   { key: "govb",  label: "Gov. bonus", get: r => r.income?.govType, inc: true, modes: ["core", "conq"] },
@@ -168,7 +170,8 @@ const val = (col, r) => { const v = col.get(r); return col.inc && isNum(v) ? v *
 
 function tableHTML(list, mode) {
   if (!list.length) return '<div class="empty">None.</div>';
-  const cols = COLS.filter(c => c.modes.includes(mode));
+  const held = [...coreRegions, ...conqRegions];
+  const cols = COLS.filter(c => c.modes.includes(mode) && (!c.hideIfZero || held.some(r => (c.get(r) || 0) !== 0)));
   const sc = cols.find(c => c.key === sortKey) || cols.find(c => c.key === "total");
   const sorted = [...list].sort((a, b) => {
     const x = val(sc, a), y = val(sc, b);
@@ -210,7 +213,7 @@ function render() {
     tile("Employees", nf0.format(sumOf("employeeCount")), "");
 
   const src = [["Development", "development"], ["Strategic resources", "strategicResourcesBonus"], ["Employee tax", "employeeIncomeTax"], ["Manager tax", "managerIncomeTax"], ["Gov. bonus", "govType"]];
-  $("sources").innerHTML = "Income by source: " + src.map(([l, k]) => `<span>${l} <b class="${inc(k) < 0 ? "neg" : ""}">${nf0.format(inc(k))}</b></span>`).join("");
+  $("sources").innerHTML = "Income by source: " + src.filter(([, k]) => k !== "strategicResourcesBonus" || inc(k) !== 0).map(([l, k]) => `<span>${l} <b class="${inc(k) < 0 ? "neg" : ""}">${nf0.format(inc(k))}</b></span>`).join("");
 
   $("coreTitle").textContent = "Core regions (" + coreRegions.length + ")";
   $("conqTitle").textContent = "Conquered regions (" + conqRegions.length + ")";
