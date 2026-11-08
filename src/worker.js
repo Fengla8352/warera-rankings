@@ -3,8 +3,8 @@
 // Everything else is served from the public/ folder by Cloudflare, which does not run this code.
 const UPSTREAM = "https://api2.warera.io/trpc/";
 const TTL_MS = 60 * 1000;
-const ALLOWED = /^(region|company|country|worker|workOffer|government|gameConfig)\.[A-Za-z]+$/;
-const COUNTRY_KEYS = ["_id", "name", "code", "govType", "income", "taxes", "currentPopulation", "currentDevelopment"];
+const ALLOWED = /^(region|company|country|worker|workOffer|government|gameConfig|alliance)\.[A-Za-z]+$/;
+const COUNTRY_KEYS = ["_id", "name", "code", "govType", "income", "taxes", "currentPopulation", "currentDevelopment", "allianceId"];
 const REGION_KEYS = ["_id", "name", "country", "initialCountry", "strategicResource", "income", "companyCount", "employeeCount"];
 
 const pick = (o, keys) => { const r = {}; for (const k of keys) if (o[k] !== undefined) r[k] = o[k]; return r; };
@@ -60,6 +60,60 @@ const trimRegions = d => {
   return JSON.stringify({ result: { data: out } });
 };
 
+// Alliance names: the API's alliance procedures are undocumented, so several likely names are tried.
+// Whatever works is returned; if nothing does, the page falls back to labels built from member countries.
+const LIST_PROCS = ["alliance.getAlliances", "alliance.getAllAlliances", "alliance.getManyAlliances"];
+const ONE_PROCS = ["alliance.getAllianceById", "alliance.getById", "alliance.getAlliance"];
+const ttl = 10 * 60 * 1000;
+let allianceMemo = null;
+
+async function tryProc(proc, input, env) {
+  const r = await upstream(proc, input, env, null);
+  let data = null;
+  if (r.status === 200) { try { data = unwrap(JSON.parse(r.body)); } catch (e) { /* ignore */ } }
+  return { status: r.status, data };
+}
+
+async function alliances(env) {
+  if (allianceMemo && Date.now() - allianceMemo.at < ttl) return respond(allianceMemo.body);
+  const tried = [];
+  const found = new Map();
+  const add = a => { if (a && a._id && a.name) found.set(a._id, { _id: a._id, name: a.name }); };
+  for (const proc of LIST_PROCS) {
+    const r = await tryProc(proc, JSON.stringify({ limit: 100 }), env);
+    tried.push({ proc, status: r.status });
+    const d = r.data;
+    const list = Array.isArray(d) ? d : Array.isArray(d?.items) ? d.items : Array.isArray(d?.alliances) ? d.alliances : [];
+    list.forEach(add);
+    if (found.size) break;
+  }
+  if (!found.size) {
+    const c = await upstream("country.getAllCountries", null, env, null);
+    let ids = [];
+    try {
+      const d = unwrap(JSON.parse(c.body));
+      const list = Array.isArray(d) ? d : Object.values(d);
+      ids = [...new Set(list.map(x => x.allianceId).filter(Boolean))];
+    } catch (e) { /* ignore */ }
+    for (const proc of ONE_PROCS) {
+      if (!ids.length) break;
+      const r = await tryProc(proc, JSON.stringify({ allianceId: ids[0] }), env);
+      tried.push({ proc, status: r.status });
+      if (r.data && r.data.name) {
+        add(r.data);
+        for (const id of ids.slice(1)) {
+          const x = await tryProc(proc, JSON.stringify({ allianceId: id }), env);
+          add(x.data);
+        }
+        break;
+      }
+    }
+  }
+  const body = JSON.stringify({ result: { data: { alliances: [...found.values()], tried } } });
+  if (found.size) allianceMemo = { at: Date.now(), body };
+  return respond(body);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -68,6 +122,8 @@ export default {
     if (url.pathname === "/api/countries") {
       return cached("countries", () => upstream("country.getAllCountries", null, env, trimCountries));
     }
+
+    if (url.pathname === "/api/alliances") return alliances(env);
 
     const m = /^\/api\/trpc\/([^/]+)$/.exec(url.pathname);
     if (m) {
