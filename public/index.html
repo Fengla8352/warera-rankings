@@ -100,9 +100,10 @@
 /* ---------- Settings ---------- */
 const REFRESH_MS = 60000;   // once a minute; the server caches the data for 60 s anyway
 
+/* Nationalist State and Mercenary State were removed in v0.28; those countries are Provisional again. */
 const GOV = {
-  republic: "Republic", nationalistState: "Nationalist State", homelandFront: "Homeland Front",
-  federation: "Federation", plutocracy: "Plutocracy", autocracy: "Autocracy", mercenaryState: "Mercenary State",
+  republic: "Republic", homelandFront: "Homeland Front",
+  federation: "Federation", plutocracy: "Plutocracy", autocracy: "Autocracy",
 };
 
 /* Column definitions. "inc" columns are income amounts, scaled by the per day / per hour toggle. */
@@ -111,7 +112,8 @@ const COLUMNS = [
   { key: "gov",   label: "Government", get: c => GOV[c.govType] || "Provisional", kind: "text", cls: "gov" },
   { key: "total", label: "Daily income", get: c => c.income?.total, inc: true, cls: "total" },
   { key: "dev",   label: "Development", get: c => c.income?.development, inc: true },
-  { key: "res",   label: "Strategic resources", get: c => c.income?.strategicResourcesBonus, inc: true },
+  /* Strategic resources stopped paying money in v0.28, so this column hides itself when every value is 0. */
+  { key: "res",   label: "Strategic resources", get: c => c.income?.strategicResourcesBonus, inc: true, hideIfZero: true },
   { key: "emp",   label: "Employee tax", get: c => c.income?.employeeIncomeTax, inc: true },
   { key: "mgr",   label: "Manager tax", get: c => c.income?.managerIncomeTax, inc: true },
   { key: "govb",  label: "Gov. bonus", get: c => c.income?.govType, inc: true },
@@ -153,8 +155,14 @@ function fmtCell(col, v) {
   return nf2.format(v);
 }
 
+function visibleCols() {
+  return COLUMNS.filter(col => !col.hideIfZero || rows.some(c => (col.get(c) || 0) !== 0));
+}
+
 function render() {
-  document.getElementById("head").innerHTML = '<th>#</th>' + COLUMNS.map(col => {
+  const cols = visibleCols();
+  if (!cols.some(c => c.key === sortKey)) sortKey = "total";
+  document.getElementById("head").innerHTML = '<th>#</th>' + cols.map(col => {
     const label = col.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : col.label;
     const sorted = col.key === sortKey;
     return `<th class="${sorted ? "sorted" : ""}"><button type="button" data-k="${col.key}">${label}${sorted ? (sortDir < 0 ? " ▼" : " ▲") : ""}</button></th>`;
@@ -171,7 +179,7 @@ function render() {
     });
 
   document.getElementById("body").innerHTML = list.map((c, i) =>
-    `<tr><td class="rank">${i + 1}</td>` + COLUMNS.map(col => {
+    `<tr><td class="rank">${i + 1}</td>` + cols.map(col => {
       const v = value(col, c);
       if (col.key === "name") return `<td class="name"><a href="country.html?c=${encodeURIComponent(c._id)}">${esc(v)}</a></td>`;
       if (col.kind === "text") return `<td class="${col.cls}">${esc(v)}</td>`;
