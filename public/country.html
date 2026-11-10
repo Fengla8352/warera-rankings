@@ -121,6 +121,8 @@
     <div class="tiles" id="tiles"></div>
     <p class="sources" id="sources"></p>
 
+    <div id="histBox" hidden></div>
+
     <h2 id="coreTitle">Core regions</h2>
     <p class="sub">Regions this country owned from the start. Gold is each region's own income.</p>
     <div class="scroll" id="coreBox"></div>
@@ -138,6 +140,7 @@
   <p class="msg" id="msg" hidden></p>
 </div>
 
+<script src="chart.js"></script>
 <script>
 const REFRESH_MS = 60000;   // once a minute; the server caches the data for 60 s anyway
 /* Nationalist State and Mercenary State were removed in v0.28; those countries are Provisional again. */
@@ -216,6 +219,20 @@ function tableHTML(list, mode) {
   return `<table><thead><tr>${head}</tr></thead><tbody>${body}${foot}</tbody></table>`;
 }
 
+/* ---------- History chart ---------- */
+let hist = null;
+const histChart = WE.mountHistoryChart(document.getElementById("histBox"));
+function drawHist() {
+  const box = $("histBox");
+  if (!hist || !hist.enabled || !country) { box.hidden = true; return; }
+  box.hidden = false;
+  histChart.set(WE.series(hist, [id]).map(p => ({ t: p.t, v: p.v * mult })),
+    { title: "Income history (" + (mult === 24 ? "gold per day" : "gold per hour") + ")" });
+}
+async function loadHist() {
+  try { hist = await WE.loadHistory(336); drawHist(); } catch (e) { /* the page works without history */ }
+}
+
 /* ---------- Render ---------- */
 function render() {
   const all = [...coreRegions, ...conqRegions];
@@ -242,6 +259,7 @@ function render() {
   $("coreBox").innerHTML = tableHTML(coreRegions, "core");
   $("conqBox").innerHTML = tableHTML(conqRegions, "conq");
   $("lostBox").innerHTML = tableHTML(lostRegions, "lost");
+  drawHist();
 }
 
 document.addEventListener("click", e => {
@@ -300,7 +318,8 @@ async function load() {
     $("status").textContent = "Update failed (" + err.message + ") · retrying";
   }
 }
-load();
+load().then(loadHist);
+setInterval(loadHist, 600000);
 setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 </script>
