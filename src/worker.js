@@ -114,8 +114,58 @@ async function alliances(env) {
   return respond(body);
 }
 
+// ---------- History ----------
+// Hourly snapshots of every country's income are kept in one KV value (binding HISTORY), for 14 days.
+// Format: { ids: [countryId...], t: [epoch ms...], d: [[hourly total per id]...] } (row i belongs to t[i]).
+const HIST_KEY = "history";
+const KEEP_MS = 14 * 24 * 3600 * 1000;
+const MIN_GAP_MS = 50 * 60 * 1000;
+let histMemo = null; // { at, h }
+
+async function readHistory(env, fresh) {
+  if (!env.HISTORY) return null;
+  if (!fresh && histMemo && Date.now() - histMemo.at < TTL_MS) return histMemo.h;
+  const h = (await env.HISTORY.get(HIST_KEY, "json")) || { ids: [], t: [], d: [] };
+  histMemo = { at: Date.now(), h };
+  return h;
+}
+
+async function snapshot(env) {
+  if (!env.HISTORY) return;
+  const h = await readHistory(env, true);
+  const now = Date.now();
+  if (h.t.length && now - h.t[h.t.length - 1] < MIN_GAP_MS) return;
+  const res = await cached("countries", () => upstream("country.getAllCountries", null, env, trimCountries));
+  if (!res.ok) return;
+  const d = unwrap(JSON.parse(await res.text()));
+  const list = Array.isArray(d) ? d : [];
+  const idx = new Map(h.ids.map((id, i) => [id, i]));
+  const row = [];
+  for (const c of list) {
+    if (!c._id || typeof c.income?.total !== "number") continue;
+    if (!idx.has(c._id)) { idx.set(c._id, h.ids.length); h.ids.push(c._id); }
+    row[idx.get(c._id)] = Math.round(c.income.total * 100) / 100;
+  }
+  for (let i = 0; i < h.ids.length; i++) if (row[i] === undefined) row[i] = null;
+  h.t.push(now); h.d.push(row);
+  while (h.t.length && h.t[0] < now - KEEP_MS) { h.t.shift(); h.d.shift(); }
+  await env.HISTORY.put(HIST_KEY, JSON.stringify(h));
+  histMemo = { at: now, h };
+}
+
+async function history(url, env, ctx) {
+  const h = await readHistory(env);
+  if (!h) return respond(JSON.stringify({ result: { data: { enabled: false, ids: [], t: [], d: [] } } }));
+  if (!h.t.length || Date.now() - h.t[h.t.length - 1] > MIN_GAP_MS) ctx.waitUntil(snapshot(env).catch(() => {}));
+  const hours = Math.min(Math.max(parseInt(url.searchParams.get("hours") || "336", 10) || 336, 1), 336);
+  const from = Date.now() - hours * 3600 * 1000;
+  const start = h.t.findIndex(t => t >= from);
+  const i0 = start < 0 ? h.t.length : start;
+  return respond(JSON.stringify({ result: { data: { enabled: true, ids: h.ids, t: h.t.slice(i0), d: h.d.slice(i0) } } }));
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method !== "GET") return fail("Method not allowed", 405);
 
@@ -124,6 +174,7 @@ export default {
     }
 
     if (url.pathname === "/api/alliances") return alliances(env);
+    if (url.pathname === "/api/history") return history(url, env, ctx);
 
     const m = /^\/api\/trpc\/([^/]+)$/.exec(url.pathname);
     if (m) {
@@ -136,5 +187,8 @@ export default {
 
     if (url.pathname.startsWith("/api/")) return fail("Not found", 404);
     return env.ASSETS.fetch(request);   // static files from public/
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(snapshot(env).catch(() => {}));
   },
 };
