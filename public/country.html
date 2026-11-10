@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
 <style>
   /* Layout: header + summary strip, then two ledger tables (core and conquered regions). */
   :root {
@@ -18,10 +19,19 @@
     --gold: #d9a73a;
     --good: #4aa8e0;
     --bad: #e0705f;
+    --hl: #223049; --head: #1a2331; --dim: #55627a;
     --display: "Bitter", Georgia, serif;
     --body: "IBM Plex Sans", system-ui, sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, monospace;
   }
+  :root[data-theme="light"] {
+    --bg: #f3f6fa; --panel: #ffffff; --line: #d3dbe6; --fg: #17202e; --muted: #5a687c;
+    --gold: #94650a; --good: #1f78b4; --bad: #c0392b; --hl: #e2eaf6; --head: #edf1f7; --dim: #8e9aac;
+  }
+  .flag { width: 20px; height: auto; max-height: 15px; margin-right: 8px; vertical-align: -2px; border-radius: 2px; box-shadow: 0 0 0 1px var(--line); }
+  .theme { background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; font: 500 12px var(--body); cursor: pointer; margin-left: 6px; }
+  .theme:hover { color: var(--fg); }
+  .theme:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--body); }
   .wrap { max-width: 1600px; margin: 0 auto; padding: 20px 16px 48px; }
@@ -29,6 +39,7 @@
   .back { color: var(--muted); text-decoration: none; font-size: 13px; }
   .back:hover { color: var(--gold); }
   header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 8px 0 16px; }
+  h1 .flag { width: 32px; max-height: 24px; margin-right: 12px; vertical-align: -3px; }
   h1 { font: 700 30px/1.1 var(--display); margin: 0; }
   h2 { font: 700 18px/1.2 var(--display); margin: 28px 0 4px; }
   .sub { color: var(--muted); margin: 4px 0 0; }
@@ -39,7 +50,7 @@
   .tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .seg button { background: var(--panel); color: var(--muted); border: 0; padding: 8px 12px; font: 500 13px var(--body); cursor: pointer; }
-  .seg button[aria-pressed=true] { background: #223049; color: var(--gold); }
+  .seg button[aria-pressed=true] { background: var(--hl); color: var(--gold); }
   .seg button:focus-visible, th button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
@@ -58,7 +69,7 @@
   table { border-collapse: collapse; width: 100%; }
   th, td { padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
   th:first-child, td:first-child, th.t, td.t { text-align: left; }
-  th { position: sticky; top: 0; background: #1a2331; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: normal; vertical-align: bottom; line-height: 1.25; }
+  th { position: sticky; top: 0; background: var(--head); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: normal; vertical-align: bottom; line-height: 1.25; }
   th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; text-align: inherit; }
   th button:hover { color: var(--fg); }
   th.sorted { color: var(--gold); }
@@ -68,9 +79,9 @@
   td.rank { color: var(--muted); width: 40px; }
   td.total { color: var(--gold); font-weight: 500; }
   td.neg { color: var(--bad); }
-  td.zero { color: #55627a; }
-  tbody tr:hover { background: #1a2331; }
-  tr.sum td { font-weight: 500; border-top: 1px solid var(--muted); border-bottom: 0; background: #1a2331; }
+  td.zero { color: var(--dim); }
+  tbody tr:hover { background: var(--head); }
+  tr.sum td { font-weight: 500; border-top: 1px solid var(--muted); border-bottom: 0; background: var(--head); }
   .empty { padding: 18px 12px; color: var(--muted); }
   .note { margin-top: 18px; color: var(--muted); font-size: 12px; max-width: 90ch; }
   .msg { padding: 40px 0; color: var(--muted); }
@@ -86,7 +97,7 @@
       <h1 id="title">Loading…</h1>
       <p class="sub" id="sub"></p>
     </div>
-    <div class="status"><span class="dot" id="dot"></span><span id="status">Loading…</span></div>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">Loading…</span><button type="button" class="theme" id="theme"></button></div>
   </header>
 
   <div id="content" hidden>
@@ -201,7 +212,7 @@ function render() {
   const inc = k => (country.income?.[k] ?? 0) * mult;
   const sumOf = k => all.reduce((t, r) => t + (r[k] || 0), 0);
   document.title = country.name + " · WarEra Country Details";
-  $("title").textContent = country.name;
+  $("title").innerHTML = flag(country.code) + esc(country.name);
   $("sub").textContent = (GOV[country.govType] || "Provisional") + " · " + nf0.format(country.currentPopulation ?? 0) + " citizens";
 
   const tile = (k, v, cls, s) => `<div class="tile"><div class="k">${k}</div><div class="v ${cls || ""}">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
@@ -240,6 +251,22 @@ $("perDay").addEventListener("click", () => setMult(24));
 $("perHour").addEventListener("click", () => setMult(1));
 $("perDay").setAttribute("aria-pressed", mult === 24);
 $("perHour").setAttribute("aria-pressed", mult === 1);
+
+/* ---------- Theme ---------- */
+const themeBtn = document.getElementById("theme");
+function paintTheme() {
+  const light = document.documentElement.dataset.theme === "light";
+  themeBtn.textContent = light ? "Dark mode" : "Light mode";
+}
+themeBtn.addEventListener("click", () => {
+  const light = document.documentElement.dataset.theme !== "light";
+  if (light) document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem("theme", light ? "light" : "dark"); } catch (e) {}
+  paintTheme();
+});
+paintTheme();
+const flag = code => /^[a-z]{2}$/.test(code || "")
+  ? `<img class="flag" src="https://flagcdn.com/w40/${code}.png" srcset="https://flagcdn.com/w80/${code}.png 2x" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : "";
 
 /* ---------- Loading ---------- */
 async function load() {
