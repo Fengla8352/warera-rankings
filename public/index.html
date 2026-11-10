@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
 <style>
   /* Layout: one dense ledger table under a slim header, like a treasury register. */
   :root {
@@ -18,10 +19,19 @@
     --gold: #d9a73a;
     --good: #4aa8e0;
     --bad: #e0705f;
+    --hl: #223049; --head: #1a2331; --dim: #55627a;
     --display: "Bitter", Georgia, serif;
     --body: "IBM Plex Sans", system-ui, sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, monospace;
   }
+  :root[data-theme="light"] {
+    --bg: #f3f6fa; --panel: #ffffff; --line: #d3dbe6; --fg: #17202e; --muted: #5a687c;
+    --gold: #94650a; --good: #1f78b4; --bad: #c0392b; --hl: #e2eaf6; --head: #edf1f7; --dim: #8e9aac;
+  }
+  .flag { width: 20px; height: auto; max-height: 15px; margin-right: 8px; vertical-align: -2px; border-radius: 2px; box-shadow: 0 0 0 1px var(--line); }
+  .theme { background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; font: 500 12px var(--body); cursor: pointer; margin-left: 6px; }
+  .theme:hover { color: var(--fg); }
+  .theme:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--body); }
   .wrap { max-width: 1600px; margin: 0 auto; padding: 24px 16px 48px; }
@@ -37,14 +47,14 @@
   input[type=search]:focus-visible, th button:focus-visible, .seg button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .seg button { background: var(--panel); color: var(--muted); border: 0; padding: 8px 12px; font: 500 13px var(--body); cursor: pointer; }
-  .seg button[aria-pressed=true] { background: #223049; color: var(--gold); }
+  .seg button[aria-pressed=true] { background: var(--hl); color: var(--gold); }
   /* No overflow on desktop: any overflow value turns this box into a scroll container and breaks the sticky header. */
   .scroll { border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
   @media (max-width: 1100px) { .scroll { overflow-x: auto; } }
   table { border-collapse: collapse; width: 100%; }
   th, td { padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
   th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2), th.t, td.t { text-align: left; }
-  th { position: sticky; top: 0; background: #1a2331; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: normal; vertical-align: bottom; line-height: 1.25; }
+  th { position: sticky; top: 0; background: var(--head); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: normal; vertical-align: bottom; line-height: 1.25; }
   th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; text-align: inherit; }
   th button:hover { color: var(--fg); }
   th.sorted { color: var(--gold); }
@@ -57,8 +67,8 @@
   td.rank { color: var(--muted); width: 44px; }
   td.total { color: var(--gold); font-weight: 500; }
   td.neg { color: var(--bad); }
-  td.zero { color: #55627a; }
-  tbody tr:hover { background: #1a2331; }
+  td.zero { color: var(--dim); }
+  tbody tr:hover { background: var(--head); }
   tbody tr:last-child td { border-bottom: 0; }
   .crumb { margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
   .crumb[hidden] { display: none; }
@@ -80,7 +90,7 @@
       <h1>WarEra Country Rankings</h1>
       <p class="sub" id="sub">Countries ranked by daily income, with the income broken down by source. Refreshes every minute.</p>
     </div>
-    <div class="status"><span class="dot" id="dot"></span><span id="status">Loading…</span></div>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">Loading…</span><button type="button" class="theme" id="theme"></button></div>
   </header>
 
   <div class="tools">
@@ -235,7 +245,7 @@ function draw(cols, items, group, linkFor) {
     const r = item.none ? "–" : ++rank;
     return `<tr><td class="rank">${r}</td>` + cols.map(c => {
       const v = value(c, item, group);
-      if (c.key === "name") return `<td class="name${item.none ? " sep" : ""}"><a href="${linkFor(item)}">${esc(v)}</a></td>`;
+      if (c.key === "name") return `<td class="name${item.none ? " sep" : ""}">${flag(item.code)}<a href="${linkFor(item)}">${esc(v)}</a></td>`;
       if (c.kind === "text") return `<td class="${c.cls} t">${esc(v)}</td>`;
       const cls = [c.cls || "", isNum(v) && v < 0 ? "neg" : "", isNum(v) && v === 0 ? "zero" : ""].join(" ");
       return `<td class="${cls}">${fmtCell(c, v)}</td>`;
@@ -307,6 +317,23 @@ document.getElementById("perDay").setAttribute("aria-pressed", mult === 24);
 document.getElementById("perHour").setAttribute("aria-pressed", mult === 1);
 document.getElementById("perDay").addEventListener("click", () => setMult(24));
 document.getElementById("perHour").addEventListener("click", () => setMult(1));
+
+
+/* ---------- Theme ---------- */
+const themeBtn = document.getElementById("theme");
+function paintTheme() {
+  const light = document.documentElement.dataset.theme === "light";
+  themeBtn.textContent = light ? "Dark mode" : "Light mode";
+}
+themeBtn.addEventListener("click", () => {
+  const light = document.documentElement.dataset.theme !== "light";
+  if (light) document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem("theme", light ? "light" : "dark"); } catch (e) {}
+  paintTheme();
+});
+paintTheme();
+const flag = code => /^[a-z]{2}$/.test(code || "")
+  ? `<img class="flag" src="https://flagcdn.com/w40/${code}.png" srcset="https://flagcdn.com/w80/${code}.png 2x" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : "";
 
 /* ---------- Loading ---------- */
 const dot = document.getElementById("dot"), statusEl = document.getElementById("status");
