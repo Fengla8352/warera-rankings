@@ -57,6 +57,8 @@
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .seg button { background: var(--panel); color: var(--muted); border: 0; padding: 8px 12px; font: 500 13px var(--body); cursor: pointer; }
   .seg button[aria-pressed=true] { background: var(--hl); color: var(--gold); }
+  .seg-btn { background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; font: 500 13px var(--body); cursor: pointer; }
+  .seg-btn:hover { color: var(--fg); }
   .seg button:focus-visible, th button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
@@ -66,6 +68,43 @@
   .tile .v.gold { color: var(--gold); }
   .tile .v.txt { font: 500 18px/1.6 var(--body); }
   .tile .s { font-size: 12px; color: var(--muted); }
+  /* Region map (treemap) and tax calculator */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px 14px; margin: 0 0 16px; }
+  .panel[hidden] { display: none; }
+  .panel h3 { font: 600 15px var(--display); margin: 0; }
+  .panel .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .panel .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+  #tm { position: relative; height: 380px; border-radius: 4px; overflow: hidden; }
+  .tl { position: absolute; padding: 6px 8px; overflow: hidden; border: 2px solid var(--panel); border-radius: 6px; font-size: 12px; line-height: 1.35; color: #fff; text-decoration: none; }
+  a.tl:hover { filter: brightness(1.15); }
+  .tl b { display: block; font: 600 13px var(--body); }
+  .tl span { font: 12px var(--mono); opacity: .95; }
+  .tl em { font-style: normal; opacity: .85; display: block; }
+  .tl .rs { position: absolute; right: 7px; bottom: 5px; font-size: 11px; opacity: .9; }
+  .tl.core { background: #8a6a1f; }
+  .tl.conq { background: #1f6a96; }
+  .tl.lost { background: repeating-linear-gradient(45deg, #6b2f27, #6b2f27 8px, #5a2620 8px, #5a2620 16px); }
+  :root[data-theme="light"] .tl.core { background: #b68a2c; }
+  :root[data-theme="light"] .tl.conq { background: #2b82b6; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; }
+  .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 800px) { .calc-grid { grid-template-columns: 1fr; gap: 14px; } }
+  .crow { margin: 0 0 16px; }
+  .crow label { display: flex; justify-content: space-between; font-weight: 500; margin-bottom: 6px; }
+  .crow label span { font: 13px var(--mono); color: var(--gold); }
+  .crow input[type=range] { width: 100%; accent-color: var(--gold); }
+  .crow.off { opacity: .5; }
+  .calc-big { font: 500 32px/1.2 var(--mono); color: var(--gold); }
+  .calc-chg { font: 500 14px var(--mono); margin-left: 10px; }
+  .calc-chg.up { color: var(--good); } .calc-chg.neg { color: var(--bad); }
+  .ctab { border-collapse: collapse; width: 100%; margin-top: 10px; }
+  .ctab th, .ctab td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--line); font: 13px var(--mono); }
+  .ctab th { font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); position: static; background: none; }
+  .ctab th:first-child, .ctab td:first-child { text-align: left; font: 13px var(--body); }
+  .ctab tr.tot td { font-weight: 500; border-top: 1px solid var(--muted); border-bottom: 0; }
+  .ctab .up { color: var(--good); } .ctab .neg { color: var(--bad); }
+  .warn { border-left: 3px solid var(--gold); background: var(--head); padding: 8px 12px; border-radius: 0 4px 4px 0; color: var(--muted); font-size: 12px; }
   .sources { margin: 10px 0 0; color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
   .sources b { color: var(--fg); font: 500 13px var(--mono); }
   .sources b.neg { color: var(--bad); }
@@ -122,6 +161,35 @@
     <p class="sources" id="sources"></p>
 
     <div id="histBox" hidden></div>
+
+    <section class="panel" id="mapBox" hidden>
+      <div class="head"><h3>Region map</h3>
+        <div class="seg" role="group" aria-label="Tile size">
+          <button type="button" data-m="income" aria-pressed="true">Income</button>
+          <button type="button" data-m="companies" aria-pressed="false">Companies</button>
+          <button type="button" data-m="employees" aria-pressed="false">Employees</button>
+        </div></div>
+      <div id="tm"></div>
+      <div class="legend" id="tmLegend"></div>
+      <p class="hint" id="tmHint"></p>
+    </section>
+
+    <section class="panel" id="calcBox" hidden>
+      <div class="head"><h3>Tax calculator</h3><button type="button" class="seg-btn" id="calcReset">Reset</button></div>
+      <div class="calc-grid">
+        <div>
+          <div class="crow" id="rowI"><label for="rngI">Income tax <span id="valI"></span></label><input type="range" id="rngI" min="0" max="25" step="0.1"><p class="hint" id="hintI"></p></div>
+          <div class="crow" id="rowM"><label for="rngM">Manager tax <span id="valM"></span></label><input type="range" id="rngM" min="0" max="25" step="0.1"><p class="hint" id="hintM"></p></div>
+          <p class="hint" id="mktNote"></p>
+          <div class="warn">Rough estimate: employee and manager tax are assumed to change in proportion to the rate. Real income also depends on wages, how many people work, and whether companies leave when taxes go up.</div>
+        </div>
+        <div>
+          <div><span class="calc-big" id="calcTotal"></span><span class="calc-chg" id="calcChg"></span></div>
+          <div class="hint" id="calcNow" style="margin:2px 0 0"></div>
+          <table class="ctab"><thead><tr><th>Source</th><th>Now</th><th>With new rates</th><th>Change</th></tr></thead><tbody id="calcBody"></tbody></table>
+        </div>
+      </div>
+    </section>
 
     <h2 id="coreTitle">Core regions</h2>
     <p class="sub">Regions this country owned from the start. Gold is each region's own income.</p>
@@ -233,6 +301,100 @@ async function loadHist() {
   try { hist = await WE.loadHistory(336); drawHist(); } catch (e) { /* the page works without history */ }
 }
 
+/* ---------- Region map (treemap) ---------- */
+let mapMetric = "income";
+function squarify(items, x, y, w, h) {
+  const out = []; let rest = items.slice().sort((a, b) => b.lv - a.lv);
+  const k = w * h / rest.reduce((t, i) => t + i.lv, 0); rest.forEach(i => { i.a = i.lv * k; });
+  const worst = (row, side) => { const s = row.reduce((t, i) => t + i.a, 0); return Math.max(...row.map(i => Math.max(side * side * i.a / (s * s), s * s / (side * side * i.a)))); };
+  while (rest.length) {
+    const side = Math.min(w, h); const row = [rest[0]]; let n = 1;
+    while (n < rest.length && worst(row.concat(rest[n]), side) <= worst(row, side)) { row.push(rest[n]); n++; }
+    const s = row.reduce((t, r) => t + r.a, 0);
+    if (w >= h) { const cw = s / h; let yy = y; for (const r of row) { const rh = r.a / cw; out.push({ ...r, x, y: yy, w: cw, h: rh }); yy += rh; } x += cw; w -= cw; }
+    else { const rh = s / w; let xx = x; for (const r of row) { const cw = r.a / rh; out.push({ ...r, x: xx, y, w: cw, h: rh }); xx += cw; } y += rh; h -= rh; }
+    rest = rest.slice(row.length);
+  }
+  return out;
+}
+function drawMap() {
+  const box = $("mapBox"), el = $("tm");
+  const list = [...coreRegions.map(r => ({ r, kind: "core" })), ...conqRegions.map(r => ({ r, kind: "conq" })), ...lostRegions.map(r => ({ r, kind: "lost" }))];
+  if (!country || !list.length) { box.hidden = true; return; }
+  box.hidden = false;
+  for (const b of box.querySelectorAll("[data-m]")) b.setAttribute("aria-pressed", b.dataset.m === mapMetric);
+  const val = r => mapMetric === "income" ? (r.income?.total || 0) * mult : mapMetric === "companies" ? (r.companyCount || 0) : (r.employeeCount || 0);
+  const items = list.map(o => ({ ...o, v: val(o.r) }));
+  const total = items.reduce((t, i) => t + Math.max(i.v, 0), 0);
+  items.forEach(i => { i.lv = Math.max(i.v, total * 0.012, 0.001); });
+  const W = el.clientWidth, H = el.clientHeight;
+  const unit = mapMetric === "income" ? (mult === 24 ? "gold per day" : "gold per hour") : mapMetric;
+  el.innerHTML = squarify(items, 0, 0, W, H).map(t => {
+    const r = t.r, holder = byId[r.country]?.name || "?", owner = byId[r.initialCountry]?.name || "?";
+    const sub = t.kind === "conq" ? "from " + owner : t.kind === "lost" ? "held by " + holder : "core";
+    const link = t.kind === "conq" ? r.initialCountry : t.kind === "lost" ? r.country : null;
+    const share = t.kind === "lost" ? taxShare(r) * mult : 0;
+    const tip = `${r.name} · ${nf0.format(t.v)} ${unit} · ${sub}` + (t.kind === "lost" ? ` · ≈ ${nf0.format(share)} tax share` : "");
+    const full = t.w >= 110 && t.h >= 62, some = t.w >= 60 && t.h >= 30;
+    const body = !some ? "" : `<b>${esc(r.name)}</b>` + (full ? `<span>${nf0.format(t.v)}</span><em>${esc(sub)}</em>` + (t.kind === "lost" && mapMetric === "income" ? `<em>≈ ${nf0.format(share)} tax share</em>` : "") : "")
+      + (full && r.strategicResource ? `<div class="rs">◆ ${esc(humanize(r.strategicResource))}</div>` : "");
+    const st = `left:${t.x}px;top:${t.y}px;width:${t.w}px;height:${t.h}px`;
+    return link ? `<a class="tl ${t.kind}" style="${st}" href="country.html?c=${encodeURIComponent(link)}" title="${esc(tip)}">${body}</a>`
+                : `<div class="tl ${t.kind}" style="${st}" title="${esc(tip)}">${body}</div>`;
+  }).join("");
+  $("tmLegend").innerHTML = `<span><i style="background:#8a6a1f"></i>Core, held (${coreRegions.length})</span><span><i style="background:#1f6a96"></i>Conquered (${conqRegions.length})</span>`
+    + (lostRegions.length ? `<span><i style="background:repeating-linear-gradient(45deg,#6b2f27,#6b2f27 3px,#5a2620 3px,#5a2620 6px)"></i>Lost to another country (${lostRegions.length})</span>` : "");
+  $("tmHint").textContent = "Tile size = " + (mapMetric === "income" ? "each region's income (" + unit + ")" : "each region's number of " + mapMetric) + ". Lost regions are sized by what they produce for the country holding them. Click a conquered or lost tile to open that country.";
+}
+$("mapBox").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (b) { mapMetric = b.dataset.m; drawMap(); } });
+window.addEventListener("resize", () => { if (country) drawMap(); });
+
+/* ---------- Tax calculator ---------- */
+/* Employee and manager tax income are assumed to scale with the rate. A tax with a current rate of 0 has no base to scale. */
+const tax = { inc: null, mgr: null };   // null = still at the current rate
+let calcReady = false;
+function rate(v) { return (Math.round(v * 100) / 100) + "%"; }
+function updateCalc() {
+  const box = $("calcBox");
+  const inc = country?.income || {}, t = country?.taxes || {};
+  const emp = inc.employeeIncomeTax || 0, mgr = inc.managerIncomeTax || 0;
+  if (!country || (!emp && !mgr)) { box.hidden = true; return; }
+  box.hidden = false;
+  const curI = t.income || 0, curM = t.manager || 0;
+  const newI = tax.inc ?? curI, newM = tax.mgr ?? curM;
+  const empN = curI > 0 ? emp * newI / curI : emp, mgrN = curM > 0 ? mgr * newM / curM : mgr;
+  const total = inc.total ?? 0, totalN = total - emp - mgr + empN + mgrN;
+  const setRow = (row, rng, val, hint, cur, now, base, what) => {
+    $(row).classList.toggle("off", cur <= 0);
+    $(rng).disabled = cur <= 0;
+    if (document.activeElement !== $(rng)) $(rng).value = now;
+    $(val).textContent = cur <= 0 ? "0% (no base)" : (Math.abs(now - cur) < 0.005 ? rate(cur) : rate(cur) + " → " + rate(now));
+    $(hint).textContent = cur <= 0 ? `This country collects no ${what} tax income now, so there is nothing to scale.` : "";
+  };
+  setRow("rowI", "rngI", "valI", "hintI", curI, newI, emp, "income");
+  setRow("rowM", "rngM", "valM", "hintM", curM, newM, mgr, "manager");
+  $("mktNote").textContent = `Market tax is ${rate(t.market || 0)}. The API does not report income from it, so it is not part of the estimate.`;
+
+  const rows = [["Development", inc.development, inc.development], ["Strategic resources", inc.strategicResourcesBonus, inc.strategicResourcesBonus], ["Employee tax", emp, empN], ["Manager tax", mgr, mgrN], ["Gov. bonus", inc.govType, inc.govType]]
+    .filter(([l, a]) => l !== "Strategic resources" || a);
+  const cell = (n, cls) => `<td class="${cls || ""}">${nf0.format(n * mult)}</td>`;
+  const dcell = d => { const v = d * mult; return `<td class="${Math.abs(v) < 0.5 ? "" : v > 0 ? "up" : "neg"}">${Math.abs(v) < 0.5 ? "0" : (v > 0 ? "+" : "−") + nf0.format(Math.abs(v))}</td>`; };
+  $("calcBody").innerHTML = rows.map(([l, a, b]) => `<tr><td>${l}</td>${cell(a || 0)}${cell(b || 0)}${dcell((b || 0) - (a || 0))}</tr>`).join("")
+    + `<tr class="tot"><td>Total</td>${cell(total)}${cell(totalN)}${dcell(totalN - total)}</tr>`;
+  const d = totalN - total, pc = total > 0 ? d / total * 100 : 0;
+  $("calcTotal").textContent = nf0.format(totalN * mult);
+  const chg = $("calcChg");
+  chg.textContent = Math.abs(d * mult) < 0.5 ? "no change" : (d > 0 ? "▲ +" : "▼ −") + nf0.format(Math.abs(d * mult)) + " (" + (d > 0 ? "+" : "−") + Math.abs(pc).toFixed(1) + "%)";
+  chg.className = "calc-chg " + (Math.abs(d * mult) < 0.5 ? "" : d > 0 ? "up" : "neg");
+  $("calcNow").textContent = "Now " + nf0.format(total * mult) + (mult === 24 ? " gold per day" : " gold per hour");
+}
+if (!calcReady) {
+  calcReady = true;
+  $("rngI").addEventListener("input", e => { tax.inc = parseFloat(e.target.value); updateCalc(); });
+  $("rngM").addEventListener("input", e => { tax.mgr = parseFloat(e.target.value); updateCalc(); });
+  $("calcReset").addEventListener("click", () => { tax.inc = tax.mgr = null; updateCalc(); });
+}
+
 /* ---------- Render ---------- */
 function render() {
   const all = [...coreRegions, ...conqRegions];
@@ -260,6 +422,8 @@ function render() {
   $("conqBox").innerHTML = tableHTML(conqRegions, "conq");
   $("lostBox").innerHTML = tableHTML(lostRegions, "lost");
   drawHist();
+  drawMap();
+  updateCalc();
 }
 
 document.addEventListener("click", e => {
@@ -325,5 +489,6 @@ setInterval(loadHist, 600000);
 setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 </script>
+<!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "ebb10900dab64713852c2ed62e495c80"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>
