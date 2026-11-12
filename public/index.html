@@ -83,6 +83,22 @@
   .crumb a:hover { color: var(--gold); }
   .crumb h2 { font: 700 20px/1.2 var(--display); margin: 0; }
   .crumb span { color: var(--muted); }
+  .aimg { width: 22px; height: 22px; object-fit: cover; border-radius: 4px; margin-right: 8px; vertical-align: -6px; }
+  .crumb h2 .aimg { width: 28px; height: 28px; vertical-align: -8px; }
+  .movers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 12px; }
+  .movers[hidden] { display: none; }
+  @media (max-width: 800px) { .movers { grid-template-columns: 1fr; } }
+  .mv { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 14px; }
+  .mv h3 { margin: 0 0 6px; font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .mv ul { list-style: none; margin: 0; padding: 0; }
+  .mv li { display: flex; align-items: center; gap: 8px; padding: 3px 0; font: 500 14px var(--body); }
+  .mv li a { color: var(--fg); text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mv li a:hover { color: var(--gold); text-decoration: underline; }
+  .mv li .amt { font: 500 13px var(--mono); }
+  .mv li .pc { font: 12px var(--mono); color: var(--muted); min-width: 56px; text-align: right; }
+  .mv .up { color: var(--good); } .mv .neg { color: var(--bad); }
+  .mv .none { color: var(--muted); font-size: 13px; }
+  td.sp { padding-top: 4px; padding-bottom: 4px; }
   td.sep { color: var(--muted); font-style: italic; }
   footer { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 80ch; }
   footer a { color: var(--muted); }
@@ -110,14 +126,20 @@
       <button type="button" id="perDay" aria-pressed="true">Per day</button>
       <button type="button" id="perHour" aria-pressed="false">Per hour</button>
     </div>
-    <button type="button" class="theme" id="theme" role="switch" aria-checked="true" aria-label="Dark mode">
-      <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-      <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
-    </button>
+    <div class="tools-right">
+      <button type="button" class="iconbtn" id="cols" aria-label="Choose columns" aria-haspopup="true" aria-expanded="false" title="Choose columns">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <button type="button" class="theme" id="theme" role="switch" aria-checked="true" aria-label="Dark mode">
+        <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+      </button>
+    </div>
   </div>
 
   <div class="crumb" id="crumb" hidden></div>
   <div id="chartBox" hidden></div>
+  <div class="movers" id="movers" hidden></div>
 
   <div class="scroll">
     <table>
@@ -127,7 +149,7 @@
   </div>
 
   <footer>
-    Income figures come from the public WarEra API (hourly values). Per day multiplies them by 24. Change 24h compares income with the hourly snapshot closest to 24 hours ago and appears once the site has about half a day of history. Unofficial fan project. <a href="/api/countries" target="_blank" rel="noopener">Raw data</a>
+    Income figures come from the public WarEra API (hourly values). Per day multiplies them by 24. Change 24h compares income with the snapshot closest to 24 hours ago (snapshots are taken about every 2 hours); the change column, the 7-day lines and the biggest changes appear once the site has about half a day of history. Unofficial fan project. <a href="/api/countries" target="_blank" rel="noopener">Raw data</a>
   </footer>
 </div>
 
@@ -148,6 +170,7 @@ const COLUMNS = [
   { key: "gov",   label: "Government", get: c => GOV[c.govType] || "Provisional", kind: "text", cls: "gov" },
   { key: "total", label: "Daily income", get: c => c.income?.total, inc: true, cls: "total" },
   { key: "d24",   label: "Change 24h", get: c => c.d24, kind: "num", pct: true, hist: true },
+  { key: "spark", label: "Last 7 days", get: c => c.spark, kind: "spark", hist: true },
   { key: "dev",   label: "Development", get: c => c.income?.development, inc: true },
   /* Strategic resources stopped paying money in v0.28, so this column hides itself when every value is 0. */
   { key: "res",   label: "Strategic resources", get: c => c.income?.strategicResourcesBonus, inc: true, hideIfZero: true },
@@ -179,8 +202,10 @@ function toList(data) {
 
 /* ---------- State & render ---------- */
 let rows = [], sortKey = "total", sortDir = -1, filter = "", mult = 24;
-let view = "country", openId = null, allianceNames = {};
-let hist = null, histFull = null, fullLoading = false;      // income history from /api/history
+let view = "country", openId = null, allianceNames = {}, allianceImages = {};
+let hist = null;      // income history from /api/history
+const hiddenCols = { country: WE.loadHidden("country"), alliance: WE.loadHidden("alliance") };
+const hk = () => (view === "alliance" && !openId ? "alliance" : "country");
 const chart = WE.mountHistoryChart(document.getElementById("chartBox"));
 try { if (localStorage.getItem("mult") === "1") mult = 1; } catch (e) {}
 
@@ -189,8 +214,16 @@ const SHARE = { key: "share", label: "Share of alliance (%)", kind: "num", share
 const col = k => COLUMNS.find(c => c.key === k);
 const MEMBERS = { key: "members", label: "Countries", get: a => a.members.length, kind: "num" };
 const ALLIANCE_NAME = { key: "name", label: "Alliance", get: a => a.name, kind: "text", cls: "name" };
-const ALLIANCE_COLS = [ALLIANCE_NAME, MEMBERS, ...["total", "d24", "dev", "res", "emp", "mgr", "govb", "pop"].map(col)];
+const ALLIANCE_COLS = [ALLIANCE_NAME, MEMBERS, ...["total", "d24", "spark", "dev", "res", "emp", "mgr", "govb", "pop"].map(col)];
 const sum = (list, f) => list.reduce((t, c) => t + (isNum(f(c)) ? f(c) : 0), 0);
+
+const WEEK = 7 * 24 * 3600 * 1000;
+function groupSpark(members) {
+  if (!hist || !hist.enabled) return null;
+  const from = Date.now() - WEEK;
+  return WE.series(hist, members.map(m => m._id)).filter(p => p.t >= from).map(p => p.v);
+}
+const aimg = i => i && i.image ? `<img class="aimg" src="${esc(i.image)}" alt="" loading="lazy" onerror="this.style.display='none'">` : "";
 
 /* Group countries by allianceId; countries without one go into a separate "no alliance" group. */
 function buildAlliances() {
@@ -210,7 +243,12 @@ function buildAlliances() {
     }
     const inc = k => sum(members, m => m.income?.[k]);
     return {
-      _id: id, name, members, none: id === NO_ALLIANCE,
+      _id: id, name, members, none: id === NO_ALLIANCE, image: allianceImages[id],
+      spark: groupSpark(members),
+      dAbs: (() => {
+        const w = members.filter(m => isNum(m.base) && m.base > 0);
+        return w.length ? sum(w, m => m.income?.total) - sum(w, m => m.base) : null;
+      })(),
       income: { total: inc("total"), development: inc("development"), strategicResourcesBonus: inc("strategicResourcesBonus"),
                 employeeIncomeTax: inc("employeeIncomeTax"), managerIncomeTax: inc("managerIncomeTax"), govType: inc("govType") },
       d24: (() => {
@@ -235,17 +273,23 @@ function fmtCell(c, v) {
   return nf2.format(v);
 }
 
-function visibleCols(cols, items) {
+function baseCols(cols, items) {
   return cols.filter(c => (!c.hideIfZero || items.some(i => (c.get(i) || 0) !== 0)) && (!c.hist || (hist && hist.enabled)));
+}
+/* The columns the visitor switched off with the menu button (the name column is always shown). */
+function visibleCols(cols, items) {
+  const off = hiddenCols[hk()];
+  return baseCols(cols, items).filter(c => c.key === "name" || !off.has(c.key));
 }
 
 /* Draws the table for whichever view is active. */
 function draw(cols, items, group, linkFor) {
   cols = visibleCols(cols, items);
-  if (!cols.some(c => c.key === sortKey)) { sortKey = "total"; sortDir = -1; }
+  if (!cols.some(c => c.key === sortKey && c.kind !== "spark")) { sortKey = cols.some(c => c.key === "total") ? "total" : "name"; sortDir = sortKey === "name" ? 1 : -1; }
   document.getElementById("head").innerHTML = '<th>#</th>' + cols.map(c => {
     const label = c.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : c.label;
     const sorted = c.key === sortKey;
+    if (c.kind === "spark") return `<th>${c.label}</th>`;
     return `<th class="${sorted ? "sorted" : ""}${c.kind === "text" ? " t" : ""}"><button type="button" data-k="${c.key}">${label}${sorted ? (sortDir < 0 ? " ▼" : " ▲") : ""}</button></th>`;
   }).join("");
 
@@ -266,12 +310,31 @@ function draw(cols, items, group, linkFor) {
     const r = item.none ? "–" : ++rank;
     return `<tr><td class="rank">${r}</td>` + cols.map(c => {
       const v = value(c, item, group);
-      if (c.key === "name") return `<td class="name${item.none ? " sep" : ""}">${flag(item.code)}<a href="${linkFor(item)}">${esc(v)}</a></td>`;
+      if (c.key === "name") return `<td class="name${item.none ? " sep" : ""}">${flag(item.code)}${aimg(item)}<a href="${linkFor(item)}">${esc(v)}</a></td>`;
       if (c.kind === "text") return `<td class="${c.cls} t">${esc(v)}</td>`;
+      if (c.kind === "spark") return `<td class="sp">${WE.sparkline(v)}</td>`;
       const cls = [c.cls || "", isNum(v) && v < 0 ? "neg" : "", c.pct && isNum(v) && v > 0.05 ? "up" : "", isNum(v) && v === 0 ? "zero" : ""].join(" ");
       return `<td class="${cls}">${fmtCell(c, v)}</td>`;
     }).join("") + "</tr>";
   }).join("") || `<tr><td colspan="${cols.length + 1}" style="text-align:center;color:var(--muted)">Nothing to show.</td></tr>`;
+}
+
+/* Biggest changes of the day: the countries (or alliances) whose income moved most in gold compared with 24 h ago. */
+function renderMovers(items, linkFor) {
+  const box = document.getElementById("movers");
+  const w = items.filter(i => !i.none && isNum(i.dAbs));
+  if (!w.length) { box.hidden = true; return; }
+  const pcOf = i => isNum(i.d24) ? (i.d24 > 0.05 ? "+" : i.d24 < -0.05 ? "−" : "") + Math.abs(i.d24).toFixed(1) + "%" : "";
+  const li = i => {
+    const up = i.dAbs > 0, amt = (up ? "+" : "−") + nf0.format(Math.abs(i.dAbs * mult));
+    return `<li>${flag(i.code)}${aimg(i)}<a href="${linkFor(i)}">${esc(i.name)}</a><span class="amt ${up ? "up" : "neg"}">${amt}</span><span class="pc">${pcOf(i)}</span></li>`;
+  };
+  const panel = (title, list) => `<div class="mv"><h3>${title}</h3>${list.length ? "<ul>" + list.map(li).join("") + "</ul>" : '<div class="none">No changes</div>'}</div>`;
+  const unit = mult === 24 ? "gold per day" : "gold per hour";
+  box.innerHTML =
+    panel(`Biggest gains in 24h (${unit})`, [...w].sort((a, b) => b.dAbs - a.dAbs).filter(i => i.dAbs > 0).slice(0, 5)) +
+    panel(`Biggest drops in 24h (${unit})`, [...w].sort((a, b) => a.dAbs - b.dAbs).filter(i => i.dAbs < 0).slice(0, 5));
+  box.hidden = false;
 }
 
 function render() {
@@ -283,8 +346,10 @@ function render() {
 
   const chartBox = document.getElementById("chartBox");
   chartBox.hidden = true;
+  document.getElementById("movers").hidden = true;
   if (view === "country") {
     crumb.hidden = true;
+    renderMovers(rows, c => "country.html?c=" + encodeURIComponent(c._id));
     sub.textContent = "Countries ranked by daily income, with the income broken down by source. Refreshes every minute.";
     draw(COLUMNS, rows, rows, c => "country.html?c=" + encodeURIComponent(c._id));
     return;
@@ -295,20 +360,18 @@ function render() {
     openId = null;
     crumb.hidden = true;
     sub.textContent = "Alliances ranked by the combined income of their member countries. Click an alliance to see each member.";
+    renderMovers(groups, g => "#alliance/" + encodeURIComponent(g._id));
     draw(ALLIANCE_COLS, groups, groups, g => "#alliance/" + encodeURIComponent(g._id));
     return;
   }
   const total = open.income.total * mult;
   crumb.hidden = false;
-  crumb.innerHTML = `<a href="#alliances">← All alliances</a><h2>${esc(open.name)}</h2><span>${open.members.length} countries · ${nf0.format(total)} ${mult === 24 ? "per day" : "per hour"} combined</span>`;
+  crumb.innerHTML = `<a href="#alliances">← All alliances</a><h2>${aimg(open)}${esc(open.name)}</h2><span>${open.members.length} countries · ${nf0.format(total)} ${mult === 24 ? "per day" : "per hour"} combined</span>`;
   sub.textContent = "Income of each member country, and its share of the alliance total.";
   if (hist && hist.enabled) {
-    ensureFull();
-    if (histFull && histFull.enabled) {
-      chartBox.hidden = false;
-      chart.set(WE.series(histFull, open.members.map(m => m._id)).map(p => ({ t: p.t, v: p.v * mult })),
-        { title: "Combined income history (" + (mult === 24 ? "per day" : "per hour") + ")", note: "Based on the alliance's current members." });
-    }
+    chartBox.hidden = false;
+    chart.set(WE.series(hist, open.members.map(m => m._id)).map(p => ({ t: p.t, v: p.v * mult })),
+      { title: "Combined income history (" + (mult === 24 ? "per day" : "per hour") + ")", note: "Based on the alliance's current members." });
   }
   const cols = [];
   for (const c of COLUMNS) { cols.push(c); if (c.key === "total") cols.push(SHARE); }
@@ -350,6 +413,15 @@ document.getElementById("perDay").addEventListener("click", () => setMult(24));
 document.getElementById("perHour").addEventListener("click", () => setMult(1));
 
 
+/* ---------- Column menu ---------- */
+WE.mountColumnMenu(document.getElementById("cols"), {
+  columns: () => baseCols(hk() === "alliance" ? ALLIANCE_COLS : COLUMNS, rows)
+    .filter(c => c.key !== "name")
+    .map(c => ({ key: c.key, label: c.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : c.label })),
+  hidden: () => hiddenCols[hk()],
+  changed: set => { hiddenCols[hk()] = set; WE.saveHidden(hk(), set); render(); },
+});
+
 /* ---------- Theme ---------- */
 const themeBtn = document.getElementById("theme");
 function paintTheme() {
@@ -371,20 +443,17 @@ const flag = code => /^[a-z]{2}$/.test(code || "")
 /* Change 24h = current hourly income vs the snapshot closest to 24 h ago (needs about 12 h of history). */
 function applyDeltas() {
   const bi = hist && hist.enabled ? WE.baselineIndex(hist, Date.now()) : -1;
+  const from = Date.now() - WEEK;
   for (const c of rows) {
     const b = bi < 0 ? null : WE.valueAt(hist, bi, c._id), cur = c.income?.total;
     c.base = b;
     c.d24 = isNum(b) && b > 0 && isNum(cur) ? (cur - b) / b * 100 : null;
+    c.dAbs = isNum(b) && b > 0 && isNum(cur) ? cur - b : null;
+    c.spark = hist && hist.enabled ? WE.series(hist, [c._id]).filter(p => p.t >= from).map(p => p.v) : null;
   }
 }
 async function loadHist() {
-  try { hist = await WE.loadHistory(26); applyDeltas(); render(); } catch (e) { /* the page works without history */ }
-}
-async function ensureFull() {
-  if (histFull || fullLoading) return;
-  fullLoading = true;
-  try { histFull = await WE.loadHistory(336); render(); } catch (e) { /* ignore */ }
-  fullLoading = false;
+  try { hist = await WE.loadHistory(336); applyDeltas(); render(); } catch (e) { /* the page works without history */ }
 }
 
 /* ---------- Loading ---------- */
@@ -416,13 +485,14 @@ async function loadNames() {
     if (!res.ok) return;
     const d = unwrap(await res.json());
     const next = {};
-    for (const a of d?.alliances || []) next[a._id] = a.name;
-    if (Object.keys(next).length) { allianceNames = next; render(); }
+    const imgs = {};
+    for (const a of d?.alliances || []) { next[a._id] = a.name; if (a.image) imgs[a._id] = a.image; }
+    if (Object.keys(next).length) { allianceNames = next; allianceImages = imgs; render(); }
   } catch (e) { /* keep the fallback labels */ }
 }
 load().then(loadNames).then(loadHist);
 setInterval(loadNames, 600000);
-setInterval(() => { histFull = null; loadHist(); }, 600000);
+setInterval(loadHist, 900000);
 setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 </script>
