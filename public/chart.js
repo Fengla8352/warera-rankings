@@ -4,6 +4,7 @@
   const nf0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
   const isNum = v => typeof v === "number" && isFinite(v);
   const HOUR = 3600 * 1000;
+  const escH = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 
   const css = document.createElement("style");
   css.textContent = `
@@ -32,6 +33,9 @@
     .cm-reset { margin-top: 6px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 4px; padding: 3px 8px; font: 12px var(--body); cursor: pointer; }
     .cm-reset:hover { color: var(--fg); }
     .spark { display: block; margin-left: auto; width: 84px; height: 22px; }
+    .hc-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .hc-leg i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+    .hc-leg:empty { display: none; }
     .hc-note { color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
   `;
   document.head.appendChild(css);
@@ -86,24 +90,28 @@
     box.classList.add("hc");
     box.innerHTML = `<div class="hc-head"><h3 class="hc-title"></h3><div class="seg" role="group" aria-label="Chart range">${
       RANGES.map(([l], i) => `<button type="button" data-r="${i}" aria-pressed="${l === "7d"}">${l}</button>`).join("")
-    }</div></div><div class="hc-plot"></div><p class="hc-note"></p>`;
-    const title = box.querySelector(".hc-title"), plot = box.querySelector(".hc-plot"), note = box.querySelector(".hc-note");
+    }</div></div><div class="hc-plot"></div><div class="hc-leg"></div><p class="hc-note"></p>`;
+    const title = box.querySelector(".hc-title"), plot = box.querySelector(".hc-plot"), leg = box.querySelector(".hc-leg"), note = box.querySelector(".hc-note");
     let range = 1, pts = [], opts = {};
 
     function draw() {
       for (const b of box.querySelectorAll("[data-r]")) b.setAttribute("aria-pressed", +b.dataset.r === range);
       title.textContent = opts.title || "";
-      const last = pts.length ? pts[pts.length - 1].t : 0;
-      const view = pts.filter(p => p.t >= last - RANGES[range][1] * HOUR);
-      if (view.length < 2) {
+      /* one series (the default, gold) or several: opts.series = [{ name, color, pts }] */
+      const all = opts.series || [{ name: null, color: "var(--gold)", pts }];
+      const last = Math.max(0, ...all.map(s => s.pts.length ? s.pts[s.pts.length - 1].t : 0));
+      const ser = all.map(s => ({ ...s, view: s.pts.filter(p => p.t >= last - RANGES[range][1] * HOUR) })).filter(s => s.view.length >= 2);
+      leg.innerHTML = opts.series ? ser.map(s => `<span><i style="background:${s.color}"></i>${escH(s.name)}</span>`).join("") : "";
+      if (!ser.length) {
         plot.innerHTML = "";
-        note.textContent = "History is being collected. The chart appears once there are a few hourly snapshots.";
+        note.textContent = "History is being collected. The chart appears once there are a few snapshots.";
         return;
       }
       const W = Math.max(plot.clientWidth || box.clientWidth || 600, 280), H = 220;
       const m = { l: 58, r: 12, t: 10, b: 24 };
-      const t0 = view[0].t, t1 = view[view.length - 1].t, span = t1 - t0;
-      let lo = Math.min(...view.map(p => p.v)), hi = Math.max(...view.map(p => p.v));
+      const vals = ser.flatMap(s => s.view.map(p => p.v)), times = ser.flatMap(s => s.view.map(p => p.t));
+      const t0 = Math.min(...times), t1 = Math.max(...times), span = t1 - t0 || 1;
+      let lo = Math.min(...vals), hi = Math.max(...vals);
       const pad = Math.max((hi - lo) * 0.15, Math.abs(hi) * 0.02, 1);
       lo -= pad; hi += pad;
       const step = niceStep(hi - lo, 4);
@@ -117,25 +125,34 @@
         const t = t0 + span * i / 4;
         xt += `<text x="${x(t)}" y="${H - 6}" text-anchor="${i === 0 ? "start" : i === 4 ? "end" : "middle"}">${fmtTime(t, span)}</text>`;
       }
-      const path = view.map((p, i) => (i ? "L" : "M") + x(p.t).toFixed(1) + " " + y(p.v).toFixed(1)).join("");
-      plot.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${(opts.title || "History").replace(/"/g, "")}">${grid}${xt}
-        <path d="${path}" fill="none" style="stroke:var(--gold)" stroke-width="2" stroke-linejoin="round"/>
-        <line class="cur" y1="${m.t}" y2="${H - m.b}" style="stroke:var(--muted)" stroke-dasharray="3 3" visibility="hidden"/>
-        <circle class="dot" r="4" style="fill:var(--gold)" visibility="hidden"/></svg><div class="hc-tip" hidden></div>`;
-      const svg = plot.querySelector("svg"), cur = svg.querySelector(".cur"), dot = svg.querySelector(".dot"), tip = plot.querySelector(".hc-tip");
-      const hide = () => { cur.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); tip.hidden = true; };
+      const paths = ser.map(s => `<path d="${s.view.map((p, i) => (i ? "L" : "M") + x(p.t).toFixed(1) + " " + y(p.v).toFixed(1)).join("")}" fill="none" style="stroke:${s.color}" stroke-width="2" stroke-linejoin="round"/>`).join("");
+      const dots = ser.map((s, i) => `<circle class="dot" data-i="${i}" r="4" style="fill:${s.color}" visibility="hidden"/>`).join("");
+      plot.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${(opts.title || "History").replace(/"/g, "")}">${grid}${xt}${paths}
+        <line class="cur" y1="${m.t}" y2="${H - m.b}" style="stroke:var(--muted)" stroke-dasharray="3 3" visibility="hidden"/>${dots}</svg><div class="hc-tip" hidden></div>`;
+      const svg = plot.querySelector("svg"), cur = svg.querySelector(".cur"), tip = plot.querySelector(".hc-tip");
+      const dotEls = [...svg.querySelectorAll(".dot")];
+      const hide = () => { cur.setAttribute("visibility", "hidden"); dotEls.forEach(d => d.setAttribute("visibility", "hidden")); tip.hidden = true; };
+      const ref = ser[0].view;
       svg.addEventListener("pointermove", e => {
         const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * W;
-        let best = view[0];
-        for (const p of view) if (Math.abs(x(p.t) - px) < Math.abs(x(best.t) - px)) best = p;
-        const cx = x(best.t), cy = y(best.v);
+        let best = ref[0];
+        for (const p of ref) if (Math.abs(x(p.t) - px) < Math.abs(x(best.t) - px)) best = p;
+        const cx = x(best.t);
         cur.setAttribute("x1", cx); cur.setAttribute("x2", cx); cur.setAttribute("visibility", "visible");
-        dot.setAttribute("cx", cx); dot.setAttribute("cy", cy); dot.setAttribute("visibility", "visible");
         const d = new Date(best.t);
-        tip.innerHTML = `${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} · <b>${nf0.format(best.v)}</b>`;
+        let cy = y(best.v), lines = "";
+        ser.forEach((s, i) => {
+          const p = s.view.find(q => q.t === best.t);
+          if (!p) { dotEls[i].setAttribute("visibility", "hidden"); return; }
+          dotEls[i].setAttribute("cx", cx); dotEls[i].setAttribute("cy", y(p.v)); dotEls[i].setAttribute("visibility", "visible");
+          if (i === 0) cy = y(p.v);
+          lines += ser.length > 1 ? `<div><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};margin-right:6px"></i>${escH(s.name)} <b>${nf0.format(p.v)}</b></div>` : ` · <b>${nf0.format(p.v)}</b>`;
+        });
+        tip.innerHTML = `${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}${lines}`;
         tip.hidden = false;
-        tip.style.left = Math.min(Math.max(cx / W * r.width, 70), r.width - 70) + "px";
-        tip.style.top = (cy / H * r.height - 10) + "px";
+        tip.style.left = Math.min(Math.max(cx / W * r.width, 80), r.width - 80) + "px";
+        tip.style.top = (ser.length > 1 ? 24 : cy / H * r.height - 10) + "px";
+        tip.style.transform = ser.length > 1 ? "translate(-50%, 0)" : "";
       });
       svg.addEventListener("pointerleave", hide);
       note.textContent = opts.note || "";
@@ -163,7 +180,6 @@
   function saveHidden(key, set) {
     try { localStorage.setItem("cols:" + key, JSON.stringify([...set])); } catch (e) {}
   }
-  const escH = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 
   /* o: { columns(): [{key,label}], hidden(): Set, changed(set) } */
   function mountColumnMenu(btn, o) {
