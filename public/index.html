@@ -436,7 +436,9 @@ themeBtn.addEventListener("click", () => {
   paintTheme();
 });
 paintTheme();
-const flag = code => /^[a-z]{2}$/.test(code || "")
+/* The game uses "uk" for the United Kingdom; flag images use the ISO code "gb". */
+const FLAG_CODE = { uk: "gb" };
+const flag = code => (code = FLAG_CODE[code] || code, /^[a-z]{2}$/.test(code || ""))
   ? `<img class="flag" src="https://flagcdn.com/w40/${code}.png" srcset="https://flagcdn.com/w80/${code}.png 2x" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : "";
 
 /* ---------- History ---------- */
