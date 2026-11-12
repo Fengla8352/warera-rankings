@@ -62,8 +62,9 @@ const trimRegions = d => {
 
 // Alliance names: the API's alliance procedures are undocumented, so several likely names are tried.
 // Whatever works is returned; if nothing does, the page falls back to labels built from member countries.
-const LIST_PROCS = ["alliance.getAlliances", "alliance.getAllAlliances", "alliance.getManyAlliances"];
-const ONE_PROCS = ["alliance.getAllianceById", "alliance.getById", "alliance.getAlliance"];
+// alliance.getById is the one that exists on the live API (the list-style names all returned 404).
+const LIST_PROCS = [];
+const ONE_PROCS = ["alliance.getById", "alliance.getAllianceById", "alliance.getAlliance"];
 const ttl = 10 * 60 * 1000;
 let allianceMemo = null;
 
@@ -74,11 +75,24 @@ async function tryProc(proc, input, env) {
   return { status: r.status, data };
 }
 
+// The alliance picture's field name is not documented, so any text field that looks like an image is used.
+const IMG_KEY = /avatar|logo|emblem|image|icon|banner|picture/i;
+function imageOf(a) {
+  const keys = Object.keys(a).filter(k => IMG_KEY.test(k) && typeof a[k] === "string" && a[k]);
+  const best = keys.find(k => /avatar|logo|emblem/i.test(k)) || keys[0];
+  return best ? a[best] : undefined;
+}
+
 async function alliances(env) {
   if (allianceMemo && Date.now() - allianceMemo.at < ttl) return respond(allianceMemo.body);
   const tried = [];
   const found = new Map();
-  const add = a => { if (a && a._id && a.name) found.set(a._id, { _id: a._id, name: a.name }); };
+  let fields = [];
+  const add = a => {
+    if (!a || !a._id || !a.name) return;
+    if (!fields.length) fields = Object.keys(a);
+    found.set(a._id, { _id: a._id, name: a.name, image: imageOf(a) });
+  };
   for (const proc of LIST_PROCS) {
     const r = await tryProc(proc, JSON.stringify({ limit: 100 }), env);
     tried.push({ proc, status: r.status });
@@ -109,17 +123,17 @@ async function alliances(env) {
       }
     }
   }
-  const body = JSON.stringify({ result: { data: { alliances: [...found.values()], tried } } });
+  const body = JSON.stringify({ result: { data: { alliances: [...found.values()], fields, tried } } });
   if (found.size) allianceMemo = { at: Date.now(), body };
   return respond(body);
 }
 
 // ---------- History ----------
-// Hourly snapshots of every country's income are kept in one KV value (binding HISTORY), for 14 days.
-// Format: { ids: [countryId...], t: [epoch ms...], d: [[hourly total per id]...] } (row i belongs to t[i]).
+// Snapshots (about one every 2 hours) of every country's income are kept in one KV value (binding HISTORY), for 14 days.
+// Format: { ids: [countryId...], t: [epoch ms...], d: [[hourly income total per id]...] } (row i belongs to t[i]).
 const HIST_KEY = "history";
 const KEEP_MS = 14 * 24 * 3600 * 1000;
-const MIN_GAP_MS = 50 * 60 * 1000;
+const MIN_GAP_MS = 100 * 60 * 1000;   // one snapshot about every 2 hours
 let histMemo = null; // { at, h }
 
 async function readHistory(env, fresh) {
