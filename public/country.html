@@ -235,6 +235,7 @@ const id = new URLSearchParams(location.search).get("c");
 let mult = 24;
 try { if (localStorage.getItem("mult") === "1") mult = 1; } catch (e) {}
 let country = null, byId = {}, coreRegions = [], conqRegions = [], lostRegions = [];
+let allRegions = [], empBy = {}, kEmp = null, kMgr = null;   // kEmp / kMgr: tax income per employee per percentage point, learned from other countries
 let sortKey = "total", sortDir = -1;
 
 /* ---------- Columns ---------- */
@@ -351,6 +352,21 @@ $("mapBox").addEventListener("click", e => { const b = e.target.closest("[data-m
 window.addEventListener("resize", () => { if (country) drawMap(); });
 
 /* ---------- Tax calculator ---------- */
+/* A country whose tax rate is 0 pays no tax income, so there is nothing to scale. For those the tax base is
+   estimated from the other countries: how much tax income one employee produces per percentage point of rate.
+   Employee tax is very consistent between countries (usually within about 5%); manager tax varies a lot, so it is rough. */
+function learnTaxBase(list, regions) {
+  empBy = {};
+  for (const r of regions) empBy[r.country] = (empBy[r.country] || 0) + (r.employeeCount || 0);
+  const median = a => { a.sort((x, y) => x - y); return a.length >= 5 ? a[Math.floor(a.length / 2)] : null; };
+  const e = [], m = [];
+  for (const c of list) {
+    const n = empBy[c._id] || 0; if (n < 20) continue;
+    if ((c.taxes?.income || 0) > 0 && (c.income?.employeeIncomeTax || 0) > 0) e.push(c.income.employeeIncomeTax / (c.taxes.income * n));
+    if ((c.taxes?.manager || 0) > 0 && (c.income?.managerIncomeTax || 0) > 0) m.push(c.income.managerIncomeTax / (c.taxes.manager * n));
+  }
+  kEmp = median(e); kMgr = median(m);
+}
 /* Employee and manager tax income are assumed to scale with the rate. A tax with a current rate of 0 has no base to scale. */
 const tax = { inc: null, mgr: null };   // null = still at the current rate
 let calcReady = false;
@@ -359,21 +375,28 @@ function updateCalc() {
   const box = $("calcBox");
   const inc = country?.income || {}, t = country?.taxes || {};
   const emp = inc.employeeIncomeTax || 0, mgr = inc.managerIncomeTax || 0;
-  if (!country || (!emp && !mgr)) { box.hidden = true; return; }
+  const held = empBy[country?._id] || 0;
+  if (!country || (!emp && !mgr && !held)) { box.hidden = true; return; }
   box.hidden = false;
   const curI = t.income || 0, curM = t.manager || 0;
   const newI = tax.inc ?? curI, newM = tax.mgr ?? curM;
-  const empN = curI > 0 ? emp * newI / curI : emp, mgrN = curM > 0 ? mgr * newM / curM : mgr;
+  /* income per percentage point: measured when the rate is above 0, otherwise estimated from other countries */
+  const bI = curI > 0 ? emp / curI : (kEmp ? kEmp * held : null);
+  const bM = curM > 0 ? mgr / curM : (kMgr ? kMgr * held : null);
+  const empN = bI === null ? emp : bI * newI, mgrN = bM === null ? mgr : bM * newM;
   const total = inc.total ?? 0, totalN = total - emp - mgr + empN + mgrN;
-  const setRow = (row, rng, val, hint, cur, now, base, what) => {
-    $(row).classList.toggle("off", cur <= 0);
-    $(rng).disabled = cur <= 0;
+  const setRow = (row, rng, val, hint, cur, now, base, what, estNote) => {
+    const usable = base !== null;
+    $(row).classList.toggle("off", !usable);
+    $(rng).disabled = !usable;
     if (document.activeElement !== $(rng)) $(rng).value = now;
-    $(val).textContent = cur <= 0 ? "0% (no base)" : (Math.abs(now - cur) < 0.005 ? rate(cur) : rate(cur) + " → " + rate(now));
-    $(hint).textContent = cur <= 0 ? `This country collects no ${what} tax income now, so there is nothing to scale.` : "";
+    $(val).textContent = !usable ? rate(cur) : (Math.abs(now - cur) < 0.005 ? rate(cur) : rate(cur) + " → " + rate(now));
+    $(hint).textContent = !usable ? `Not enough data to estimate ${what} tax for this country.` : cur <= 0 ? estNote : "";
   };
-  setRow("rowI", "rngI", "valI", "hintI", curI, newI, emp, "income");
-  setRow("rowM", "rngM", "valM", "hintM", curM, newM, mgr, "manager");
+  setRow("rowI", "rngI", "valI", "hintI", curI, newI, bI, "employee",
+    "No employee tax is collected now, so the base is estimated from the other countries (usually accurate to about 5%).");
+  setRow("rowM", "rngM", "valM", "hintM", curM, newM, bM, "manager",
+    "No manager tax is collected now, so the base is estimated from the other countries. Manager tax varies a lot between countries, so treat this as very rough.");
   $("mktNote").textContent = `Market tax is ${rate(t.market || 0)}. The API does not report income from it, so it is not part of the estimate.`;
 
   const rows = [["Development", inc.development, inc.development], ["Strategic resources", inc.strategicResourcesBonus, inc.strategicResourcesBonus], ["Employee tax", emp, empN], ["Manager tax", mgr, mgrN], ["Gov. bonus", inc.govType, inc.govType]]
@@ -473,6 +496,8 @@ async function load() {
     country = byId[id];
     if (!country) { $("title").textContent = "Country not found"; $("msg").textContent = "No country with this id. Go back to the ranking and pick one."; $("msg").hidden = false; $("content").hidden = true; return; }
     const regions = Array.isArray(rg) ? rg : Object.values(rg);
+    allRegions = regions;
+    learnTaxBase(list, regions);
     coreRegions = regions.filter(r => r.country === id && r.initialCountry === id);
     conqRegions = regions.filter(r => r.country === id && r.initialCountry !== id);
     lostRegions = regions.filter(r => r.initialCountry === id && r.country !== id);
