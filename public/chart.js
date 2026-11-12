@@ -17,6 +17,21 @@
     .hc-tip { position: absolute; pointer-events: none; background: var(--head); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; font: 12px var(--mono); white-space: nowrap; transform: translate(-50%, -100%); }
     .hc-tip b { color: var(--gold); font-weight: 500; }
     .hc-tip[hidden] { display: none; }
+    .tools-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+    .tools-right .theme { margin-left: 0; }
+    .iconbtn { width: 36px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .iconbtn svg { width: 16px; height: 16px; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; fill: none; }
+    .iconbtn:hover { border-color: var(--muted); }
+    .iconbtn[aria-expanded=true] svg { stroke: var(--gold); }
+    .iconbtn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+    .cm { position: absolute; z-index: 30; min-width: 210px; max-height: 70vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+    .cm[hidden] { display: none; }
+    .cm-h { font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+    .cm label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font: 13px var(--body); cursor: pointer; }
+    .cm input { accent-color: var(--gold); }
+    .cm-reset { margin-top: 6px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 4px; padding: 3px 8px; font: 12px var(--body); cursor: pointer; }
+    .cm-reset:hover { color: var(--fg); }
+    .spark { display: block; margin-left: auto; width: 84px; height: 22px; }
     .hc-note { color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
   `;
   document.head.appendChild(css);
@@ -131,5 +146,56 @@
     return { set(p, o) { pts = p; opts = o || {}; draw(); } };
   }
 
-  window.WE = { loadHistory, series, baselineIndex, valueAt, mountHistoryChart };
+  /* ----- Sparkline: a tiny line of recent values. Blue if it ended higher than it started, red if lower. ----- */
+  function sparkline(vals) {
+    if (!vals || vals.length < 2) return "—";
+    const W = 84, H = 22, p = 2;
+    const lo = Math.min(...vals), hi = Math.max(...vals), r = hi - lo || 1;
+    const pts = vals.map((v, i) => (p + i / (vals.length - 1) * (W - 2 * p)).toFixed(1) + "," + (H - p - (v - lo) / r * (H - 2 * p)).toFixed(1)).join(" ");
+    const c = vals[vals.length - 1] >= vals[0] ? "var(--good)" : "var(--bad)";
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+  }
+
+  /* ----- Column picker: the hamburger button opens a list of checkboxes. The choice is kept in localStorage. ----- */
+  function loadHidden(key) {
+    try { return new Set(JSON.parse(localStorage.getItem("cols:" + key) || "[]")); } catch (e) { return new Set(); }
+  }
+  function saveHidden(key, set) {
+    try { localStorage.setItem("cols:" + key, JSON.stringify([...set])); } catch (e) {}
+  }
+  const escH = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+  /* o: { columns(): [{key,label}], hidden(): Set, changed(set) } */
+  function mountColumnMenu(btn, o) {
+    const pop = document.createElement("div");
+    pop.className = "cm"; pop.hidden = true;
+    document.body.appendChild(pop);
+    const close = () => { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+    function build() {
+      const hidden = o.hidden();
+      pop.innerHTML = '<div class="cm-h">Columns</div>' + o.columns().map(c =>
+        `<label><input type="checkbox" data-k="${escH(c.key)}"${hidden.has(c.key) ? "" : " checked"}> ${escH(c.label)}</label>`).join("")
+        + '<button type="button" class="cm-reset">Show all</button>';
+    }
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      if (!pop.hidden) return close();
+      build();
+      const r = btn.getBoundingClientRect();
+      pop.style.top = (r.bottom + window.scrollY + 6) + "px";
+      pop.style.right = (document.documentElement.clientWidth - r.right) + "px";
+      pop.hidden = false; btn.setAttribute("aria-expanded", "true");
+    });
+    pop.addEventListener("click", e => e.stopPropagation());
+    pop.addEventListener("change", e => {
+      const k = e.target.dataset.k, set = new Set(o.hidden());
+      if (e.target.checked) set.delete(k); else set.add(k);
+      o.changed(set);
+    });
+    pop.addEventListener("click", e => { if (e.target.closest(".cm-reset")) { o.changed(new Set()); build(); } });
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && !pop.hidden) { close(); btn.focus(); } });
+  }
+
+  window.WE = { sparkline, loadHidden, saveHidden, mountColumnMenu, loadHistory, series, baselineIndex, valueAt, mountHistoryChart };
 })();
