@@ -71,6 +71,7 @@
   /* Region map (treemap) and tax calculator */
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px 14px; margin: 0 0 16px; }
   .panel[hidden] { display: none; }
+  #mapBox { margin-top: 24px; }
   .panel h3 { font: 600 15px var(--display); margin: 0; }
   .panel .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
   .panel .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
@@ -162,6 +163,18 @@
 
     <div id="histBox" hidden></div>
 
+    <h2 id="coreTitle">Core regions</h2>
+    <p class="sub">Regions this country owned from the start. Gold is each region's own income.</p>
+    <div class="scroll" id="coreBox"></div>
+
+    <h2 id="conqTitle">Conquered regions</h2>
+    <p class="sub">Regions this country holds that originally belonged to another country.</p>
+    <div class="scroll" id="conqBox"></div>
+
+    <h2 id="lostTitle">Lost regions</h2>
+    <p class="sub">Regions that originally belonged to this country and are now held by another one, ranked by the income they produce. The last column is an estimate of the 10% income tax share the original owner receives.</p>
+    <div class="scroll" id="lostBox"></div>
+
     <section class="panel" id="mapBox" hidden>
       <div class="head"><h3>Region map</h3>
         <div class="seg" role="group" aria-label="Tile size">
@@ -190,18 +203,6 @@
         </div>
       </div>
     </section>
-
-    <h2 id="coreTitle">Core regions</h2>
-    <p class="sub">Regions this country owned from the start. Gold is each region's own income.</p>
-    <div class="scroll" id="coreBox"></div>
-
-    <h2 id="conqTitle">Conquered regions</h2>
-    <p class="sub">Regions this country holds that originally belonged to another country.</p>
-    <div class="scroll" id="conqBox"></div>
-
-    <h2 id="lostTitle">Lost regions</h2>
-    <p class="sub">Regions that originally belonged to this country and are now held by another one, ranked by the income they produce. The last column is an estimate of the 10% income tax share the original owner receives.</p>
-    <div class="scroll" id="lostBox"></div>
 
     <p class="note">Figures are live hourly values from the public WarEra API (Per day multiplies them by 24). Employee tax changes with wages paid, so region figures can differ slightly from the country total shown on the ranking page. The tax share for lost regions is calculated here as 10% of the region's income tax (the patch notes give the original owner 10%), so treat it as an estimate. Unofficial fan project.</p>
   </div>
