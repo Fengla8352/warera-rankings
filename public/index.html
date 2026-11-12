@@ -100,6 +100,34 @@
   .mv .none { color: var(--muted); font-size: 13px; }
   td.sp { padding-top: 4px; padding-bottom: 4px; }
   td.sep { color: var(--muted); font-style: italic; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; }
+  .panel h3 { font: 600 15px var(--display); margin: 0 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 6px 4px 12px; font-weight: 500; }
+  .chip u { width: 10px; height: 10px; border-radius: 50%; }
+  .chip a { color: var(--muted); text-decoration: none; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+  .chip a:hover { background: var(--hl); color: var(--fg); }
+  .chip .flag { margin-right: 0; }
+  .chips select { background: var(--panel); border: 1px dashed var(--muted); color: var(--muted); border-radius: 999px; padding: 6px 12px; font: inherit; max-width: 220px; }
+  .chips select:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0 0 14px; align-items: start; }
+  @media (max-width: 900px) { .cmp-grid { grid-template-columns: 1fr; } }
+  #cmpChart.hc { margin: 0; }
+  .br { display: grid; grid-template-columns: minmax(90px, 140px) 1fr 62px; gap: 10px; align-items: center; margin: 10px 0; }
+  .br .nm { display: flex; align-items: center; gap: 8px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .br .nm u { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+  .br .bar { display: flex; height: 18px; background: var(--head); border-radius: 3px; overflow: hidden; }
+  .br .bar i { display: block; height: 100%; }
+  .br .v { font: 13px var(--mono); text-align: right; color: var(--gold); }
+  .cmp-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .cmp-leg i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  #cmpTable th, #cmpTable td { text-align: right; }
+  #cmpTable th:first-child, #cmpTable td:first-child { text-align: left; color: var(--muted); font: 13px var(--body); }
+  #cmpTable th { font: 600 13px var(--body); text-transform: none; letter-spacing: 0; color: var(--fg); position: static; }
+  #cmpTable th u { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+  #cmpTable th a { color: var(--fg); text-decoration: none; } #cmpTable th a:hover { color: var(--gold); text-decoration: underline; }
+  #cmpTable td.best { color: var(--good); font-weight: 500; }
+  .cmp-note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
   footer { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 80ch; }
   footer a { color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) { .dot.live { animation: pulse 2s infinite; } }
@@ -122,6 +150,9 @@
       <button type="button" id="vCountry" aria-pressed="true">Country</button>
       <button type="button" id="vAlliance" aria-pressed="false">Alliance</button>
     </div>
+    <div class="seg" role="group" aria-label="Compare countries">
+      <button type="button" id="vCompare" aria-pressed="false">Compare</button>
+    </div>
     <div class="seg" role="group" aria-label="Income period">
       <button type="button" id="perDay" aria-pressed="true">Per day</button>
       <button type="button" id="perHour" aria-pressed="false">Per hour</button>
@@ -141,7 +172,17 @@
   <div id="chartBox" hidden></div>
   <div class="movers" id="movers" hidden></div>
 
-  <div class="scroll">
+  <div id="compare" hidden>
+    <div class="chips" id="cmpChips"></div>
+    <div class="cmp-grid">
+      <div class="panel"><h3>Income by source</h3><div id="cmpBars"></div><div class="cmp-leg" id="cmpLeg"></div></div>
+      <div id="cmpChart" hidden></div>
+    </div>
+    <div class="scroll" id="cmpTable"></div>
+    <p class="cmp-note">The best value in each row is highlighted in blue. Tax rates are not ranked, because a higher rate is not simply better or worse. Regions, companies and employees count the regions a country holds now.</p>
+  </div>
+
+  <div class="scroll" id="tableWrap">
     <table>
       <thead><tr id="head"></tr></thead>
       <tbody id="body"><tr><td colspan="14" style="text-align:center;color:var(--muted)">Loading countries…</td></tr></tbody>
@@ -208,6 +249,84 @@ const hiddenCols = { country: WE.loadHidden("country"), alliance: WE.loadHidden(
 const hk = () => (view === "alliance" && !openId ? "alliance" : "country");
 const chart = WE.mountHistoryChart(document.getElementById("chartBox"));
 try { if (localStorage.getItem("mult") === "1") mult = 1; } catch (e) {}
+
+/* ---------- Compare view ---------- */
+const CMP_COLORS = ["#d9a73a", "#4aa8e0", "#6cc788", "#b58be0"];
+const CMP_MAX = 4;
+let cmpIds = [], regionStats = null;
+const cmpChart = WE.mountHistoryChart(document.getElementById("cmpChart"));
+const cmpHash = ids => "#compare/" + ids.map(encodeURIComponent).join(",");
+
+async function loadRegionStats() {
+  if (regionStats) return;
+  regionStats = {};
+  try {
+    const res = await fetch("/api/trpc/region.getRegionsObject");
+    if (!res.ok) throw new Error();
+    const d = unwrap(await res.json());
+    const stats = {};
+    for (const r of Array.isArray(d) ? d : Object.values(d)) {
+      const s = stats[r.country] || (stats[r.country] = { n: 0, comp: 0, emp: 0 });
+      s.n++; s.comp += r.companyCount || 0; s.emp += r.employeeCount || 0;
+    }
+    regionStats = stats; render();
+  } catch (e) { regionStats = null; }
+}
+
+function renderCompare() {
+  const byIdx = Object.fromEntries(rows.map(c => [c._id, c]));
+  let ids = cmpIds.filter(id => byIdx[id]).slice(0, CMP_MAX);
+  if (!ids.length) ids = [...rows].sort((a, b) => (b.income?.total || 0) - (a.income?.total || 0)).slice(0, 3).map(c => c._id);
+  const sel = ids.map(id => byIdx[id]);
+  sel.forEach((c, i) => { c.color = CMP_COLORS[i]; });
+
+  /* chips + add picker */
+  const others = rows.filter(c => !ids.includes(c._id)).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  document.getElementById("cmpChips").innerHTML = sel.map(c =>
+    `<span class="chip"><u style="background:${c.color}"></u>${flag(c.code)}${esc(c.name)}${sel.length > 1 ? `<a href="${cmpHash(ids.filter(i => i !== c._id))}" aria-label="Remove ${esc(c.name)}" title="Remove">×</a>` : "<span></span>"}</span>`).join("")
+    + (sel.length < CMP_MAX ? `<select id="cmpAdd" aria-label="Add country"><option value="">+ Add country</option>${others.map(c => `<option value="${esc(c._id)}">${esc(c.name)}</option>`).join("")}</select>` : "");
+  const add = document.getElementById("cmpAdd");
+  if (add) add.addEventListener("change", () => { if (add.value) location.hash = cmpHash([...ids, add.value]); });
+
+  /* income by source (stacked bars) */
+  const parts = [["development", "Development", "#8a6a1f"], ["employeeIncomeTax", "Employee tax", "#1f6a96"], ["managerIncomeTax", "Manager tax", "#3f8f6a"], ["govType", "Gov. bonus", "#7a5aa8"]];
+  if (sel.some(c => (c.income?.strategicResourcesBonus || 0) !== 0)) parts.splice(1, 0, ["strategicResourcesBonus", "Strategic resources", "#b0813c"]);
+  const mx = Math.max(...sel.map(c => parts.reduce((t, [k]) => t + Math.max(c.income?.[k] || 0, 0), 0)), 1e-9);
+  document.getElementById("cmpBars").innerHTML = sel.map(c => {
+    const segs = parts.map(([k, l, col]) => `<i title="${l}: ${nf0.format((c.income?.[k] || 0) * mult)}" style="width:${Math.max(c.income?.[k] || 0, 0) / mx * 100}%;background:${col}"></i>`).join("");
+    return `<div class="br"><span class="nm"><u style="background:${c.color}"></u>${esc(c.name)}</span><div class="bar">${segs}</div><span class="v">${nf0.format((c.income?.total || 0) * mult)}</span></div>`;
+  }).join("");
+  document.getElementById("cmpLeg").innerHTML = parts.map(([, l, col]) => `<span><i style="background:${col}"></i>${l}</span>`).join("");
+
+  /* history of all selected countries */
+  const cb = document.getElementById("cmpChart");
+  if (hist && hist.enabled) {
+    cb.hidden = false;
+    cmpChart.set([], { title: "Income history (" + (mult === 24 ? "gold per day" : "gold per hour") + ")",
+      series: sel.map(c => ({ name: c.name, color: c.color, pts: WE.series(hist, [c._id]).map(p => ({ t: p.t, v: p.v * mult })) })) });
+  } else cb.hidden = true;
+
+  /* table */
+  loadRegionStats();
+  const st = c => (regionStats && regionStats[c._id]) || (regionStats ? { n: 0, comp: 0, emp: 0 } : null);
+  const I = k => c => (c.income?.[k] || 0) * mult;
+  const defs = [
+    [mult === 24 ? "Daily income" : "Hourly income", I("total"), 1, nf0],
+    ["Development", I("development"), 1, nf0], ["Employee tax", I("employeeIncomeTax"), 1, nf0], ["Manager tax", I("managerIncomeTax"), 1, nf0], ["Gov. bonus", I("govType"), 1, nf0],
+    ["Income tax %", c => c.taxes?.income, 0, nf2], ["Manager tax %", c => c.taxes?.manager, 0, nf2], ["Market tax %", c => c.taxes?.market, 0, nf2],
+    ["Population", c => c.currentPopulation, 1, nf0],
+    ["Regions held", c => st(c)?.n, 1, nf0], ["Companies", c => st(c)?.comp, 1, nf0], ["Employees", c => st(c)?.emp, 1, nf0],
+    ["Income per citizen", c => c.currentPopulation ? I("total")(c) / c.currentPopulation : null, 1, nf2],
+    ["Income per employee", c => st(c)?.emp ? I("total")(c) / st(c).emp : null, 1, nf2],
+  ];
+  if (sel.some(c => (c.income?.strategicResourcesBonus || 0) !== 0)) defs.splice(2, 0, ["Strategic resources", I("strategicResourcesBonus"), 1, nf0]);
+  const head = "<th></th>" + sel.map(c => `<th><u style="background:${c.color}"></u>${flag(c.code)}<a href="country.html?c=${encodeURIComponent(c._id)}">${esc(c.name)}</a></th>`).join("");
+  const body = defs.map(([label, f, rank, fmt]) => {
+    const v = sel.map(f), best = rank && sel.length > 1 ? Math.max(...v.filter(isNum)) : null;
+    return `<tr><td>${label}</td>` + v.map(x => `<td class="${rank && isNum(x) && x === best && x > 0 ? "best" : ""}">${isNum(x) ? fmt.format(x) : "—"}</td>`).join("") + "</tr>";
+  }).join("");
+  document.getElementById("cmpTable").innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
 
 const NO_ALLIANCE = "none";
 const SHARE = { key: "share", label: "Share of alliance (%)", kind: "num", share: true };
@@ -340,13 +459,24 @@ function renderMovers(items, linkFor) {
 function render() {
   const crumb = document.getElementById("crumb");
   const sub = document.getElementById("sub");
-  for (const [id, v] of [["vCountry", "country"], ["vAlliance", "alliance"]])
+  for (const [id, v] of [["vCountry", "country"], ["vAlliance", "alliance"], ["vCompare", "compare"]])
     document.getElementById(id).setAttribute("aria-pressed", view === v);
+  const cmp = view === "compare";
+  document.getElementById("compare").hidden = !cmp;
+  document.getElementById("tableWrap").hidden = cmp;
+  document.getElementById("q").hidden = cmp;
+  document.getElementById("cols").hidden = cmp;
   document.getElementById("q").placeholder = view === "alliance" && !openId ? "Filter alliances or members…" : "Filter countries…";
 
   const chartBox = document.getElementById("chartBox");
   chartBox.hidden = true;
   document.getElementById("movers").hidden = true;
+  if (cmp) {
+    crumb.hidden = true;
+    sub.textContent = "Compare up to 4 countries side by side. Copy the address bar to share the comparison.";
+    renderCompare();
+    return;
+  }
   if (view === "country") {
     crumb.hidden = true;
     renderMovers(rows, c => "country.html?c=" + encodeURIComponent(c._id));
@@ -390,7 +520,9 @@ document.getElementById("q").addEventListener("input", e => { filter = e.target.
 function route() {
   const h = decodeURIComponent(location.hash.slice(1));
   const m = /^alliance\/(.+)$/.exec(h);
-  const nv = m || h === "alliances" ? "alliance" : "country";
+  const mc = /^compare(?:\/(.*))?$/.exec(h);
+  const nv = mc ? "compare" : m || h === "alliances" ? "alliance" : "country";
+  if (mc) cmpIds = (mc[1] || "").split(",").filter(Boolean);
   const no = m ? m[1] : null;
   if (nv !== view || no !== openId) { sortKey = "total"; sortDir = -1; }
   view = nv; openId = no;
@@ -398,6 +530,7 @@ function route() {
 }
 document.getElementById("vCountry").addEventListener("click", () => { history.replaceState(null, "", location.pathname + location.search); route(); });
 document.getElementById("vAlliance").addEventListener("click", () => { location.hash = "alliances"; });
+document.getElementById("vCompare").addEventListener("click", () => { location.hash = cmpIds.length ? cmpHash(cmpIds) : "compare"; });
 window.addEventListener("hashchange", route);
 
 function setMult(m) {
