@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Discord report · WarEra Country Rankings</title>
+<meta name="description" content="Get a daily WarEra report in your Discord channel for the country or alliance you choose.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="WarEra Country Rankings">
+<meta property="og:title" content="Daily Discord report for your WarEra country">
+<meta property="og:description" content="Pick a country, an alliance or the world top 10 and get its income report in your Discord channel every day.">
+<meta property="og:image" content="__ORIGIN__/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
+<style>
+  :root {
+    --bg: #0d1219; --panel: #141b26; --line: #253041; --fg: #e6ebf2; --muted: #8793a6;
+    --gold: #d9a73a; --good: #4aa8e0; --bad: #e0705f; --hl: #223049; --head: #1a2331; --dim: #55627a;
+    --display: "Bitter", Georgia, serif; --body: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f6fa; --panel: #ffffff; --line: #d3dbe6; --fg: #17202e; --muted: #5a687c;
+    --gold: #94650a; --good: #1f78b4; --bad: #c0392b; --hl: #e2eaf6; --head: #edf1f7; --dim: #8e9aac;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--body); }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .back { color: var(--muted); text-decoration: none; }
+  .back:hover { color: var(--gold); }
+  h1 { font: 700 28px/1.1 var(--display); margin: 0 0 4px; }
+  h2 { font: 600 17px var(--display); margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 18px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 16px 18px; margin: 0 0 16px; }
+  .steps { margin: 0; padding-left: 20px; color: var(--muted); }
+  .steps li { margin: 4px 0; } .steps b { color: var(--fg); font-weight: 500; }
+  label.f { display: block; font-weight: 500; margin: 14px 0 6px; }
+  label.f small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  input[type=password], input[type=text], select { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--fg); padding: 9px 10px; border-radius: 4px; font: inherit; }
+  input:focus-visible, select:focus-visible, button:focus-visible, .seg button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; } .row > div { flex: 1 1 220px; }
+  .show { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--muted); font-size: 12px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; flex-wrap: wrap; }
+  .seg button { background: var(--bg); color: var(--muted); border: 0; padding: 8px 14px; font: 500 13px var(--body); cursor: pointer; }
+  .seg button[aria-pressed=true] { background: var(--hl); color: var(--gold); }
+  .btn { background: var(--gold); color: #0d1219; border: 0; border-radius: 4px; padding: 10px 18px; font: 600 14px var(--body); cursor: pointer; }
+  :root[data-theme="light"] .btn { color: #fff; }
+  .btn.ghost { background: var(--panel); color: var(--fg); border: 1px solid var(--line); font-weight: 500; }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; align-items: center; }
+  .msg { margin: 12px 0 0; padding: 9px 12px; border-radius: 4px; border-left: 3px solid var(--muted); background: var(--head); }
+  .msg.ok { border-color: var(--good); } .msg.err { border-color: var(--bad); }
+  .msg[hidden] { display: none; }
+  .list { margin: 12px 0 0; padding: 0; list-style: none; }
+  .list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .list li:last-child { border-bottom: 0; }
+  .list small { color: var(--muted); display: block; }
+  .note { color: var(--muted); font-size: 12px; margin: 0; }
+  .theme { position: relative; width: 62px; height: 32px; padding: 0; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; flex: none; }
+  .theme::before { content: ""; box-sizing: border-box; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--hl); border: 1px solid var(--gold); transform: translateX(30px); }
+  .theme[aria-checked=false]::before { transform: none; }
+  .theme svg { position: absolute; top: 7px; width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .theme .sun { left: 7px; } .theme .moon { right: 7px; }
+  .theme[aria-checked=true] .moon, .theme[aria-checked=false] .sun { stroke: var(--gold); }
+  .theme:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) { .theme::before { transition: transform .2s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="back" href="/">← Rankings</a>
+    <button type="button" class="theme" id="theme" role="switch" aria-checked="true" aria-label="Dark mode">
+      <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+    </button>
+  </div>
+  <h1>Daily Discord report</h1>
+  <p class="sub">Get a short WarEra report in your Discord channel once a day, for the country or alliance you choose.</p>
+
+  <div class="panel">
+    <h2>1. Make a webhook in Discord</h2>
+    <ol class="steps">
+      <li>Open the channel's settings: <b>Edit Channel → Integrations → Webhooks</b>.</li>
+      <li>Click <b>New Webhook</b>, name it if you like, and click <b>Copy Webhook URL</b>.</li>
+      <li>Paste that URL below. You need the <b>Manage Webhooks</b> permission in that channel.</li>
+    </ol>
+  </div>
+
+  <form class="panel" id="form" autocomplete="off">
+    <h2>2. Choose the report</h2>
+    <label class="f" for="wh">Webhook URL</label>
+    <input type="password" id="wh" placeholder="https://discord.com/api/webhooks/…" spellcheck="false" autocomplete="off" required>
+    <label class="show"><input type="checkbox" id="showWh"> Show the URL</label>
+
+    <label class="f">What should the report be about?</label>
+    <div class="seg" role="group" aria-label="Report type">
+      <button type="button" data-t="country" aria-pressed="true">A country</button>
+      <button type="button" data-t="alliance" aria-pressed="false">An alliance</button>
+      <button type="button" data-t="world" aria-pressed="false">World top 10</button>
+    </div>
+
+    <div class="row">
+      <div id="targetBox"><label class="f" for="target" id="targetLabel">Country</label><select id="target"></select></div>
+      <div><label class="f" for="hour">Time of day <small id="tz"></small></label><select id="hour"></select></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" type="submit" id="go">Create report</button>
+      <span class="note">A first report is posted right away, so you can see what it looks like.</span>
+    </div>
+    <p class="msg" id="msg" role="status" hidden></p>
+  </form>
+
+  <div class="panel">
+    <h2>Your reports</h2>
+    <p class="note">Paste your webhook above, then show the reports that use it. You can remove them here at any time.</p>
+    <div class="actions" style="margin-top:12px"><button class="btn ghost" type="button" id="show">Show my reports</button></div>
+    <p class="msg" id="msg2" role="status" hidden></p>
+    <ul class="list" id="list"></ul>
+  </div>
+
+  <div class="panel">
+    <h2>What is stored</h2>
+    <p class="note">To send the report, this site stores your webhook URL, the report you chose, the time of day and your time zone. The URL is never shown again or sent to anyone else. Anyone who has the URL can post in that channel, so keep it private. Delete the webhook in Discord, or remove the report here, and nothing more is sent. At most 3 reports per webhook.</p>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+let type = "country", countries = [], names = {};
+const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (e) { return "UTC"; } })();
+$("tz").textContent = "(your time zone: " + tz + ")";
+$("hour").innerHTML = Array.from({ length: 24 }, (_, h) => `<option value="${h}"${h === 8 ? " selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("");
+
+function unwrap(p) { let d = Array.isArray(p) ? p[0] : p; d = d?.result?.data ?? d; return d?.json ?? d; }
+
+function fillTargets() {
+  const box = $("targetBox");
+  box.hidden = type === "world";
+  $("targetLabel").textContent = type === "alliance" ? "Alliance" : "Country";
+  if (type === "country") {
+    $("target").innerHTML = [...countries].sort((a, b) => String(a.name).localeCompare(String(b.name))).map(c => `<option value="${esc(c._id)}">${esc(c.name)}</option>`).join("");
+  } else if (type === "alliance") {
+    const g = {};
+    for (const c of countries) if (c.allianceId) (g[c.allianceId] = g[c.allianceId] || []).push(c);
+    const label = id => names[id] || ("Alliance of " + g[id].sort((a, b) => (b.income?.total || 0) - (a.income?.total || 0)).slice(0, 3).map(m => m.name).join(", "));
+    $("target").innerHTML = Object.keys(g).map(id => [id, label(id)]).sort((a, b) => a[1].localeCompare(b[1])).map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join("");
+  }
+}
+for (const b of document.querySelectorAll("[data-t]")) b.addEventListener("click", () => {
+  type = b.dataset.t;
+  for (const x of document.querySelectorAll("[data-t]")) x.setAttribute("aria-pressed", x === b);
+  fillTargets();
+});
+$("showWh").addEventListener("change", e => { $("wh").type = e.target.checked ? "text" : "password"; });
+
+function say(id, text, kind) { const m = $(id); m.textContent = text; m.className = "msg " + (kind || ""); m.hidden = !text; }
+async function post(action, body) {
+  const res = await fetch("/api/report/" + action, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let j = {}; try { j = await res.json(); } catch (e) {}
+  if (!res.ok || j.error) throw new Error(j.error || "Something went wrong (HTTP " + res.status + ").");
+  return j;
+}
+
+$("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  say("msg", "");
+  $("go").disabled = true; $("go").textContent = "Creating…";
+  try {
+    const j = await post("subscribe", { webhook: $("wh").value.trim(), type, target: type === "world" ? "" : $("target").value, hour: +$("hour").value, tz });
+    say("msg", `Done. “${j.name}” will be posted every day at ${String(j.hour).padStart(2, "0")}:00 (${j.tz}). Check your Discord channel for the first one.`, "ok");
+    if (!$("list").hidden) showReports();
+  } catch (err) { say("msg", err.message, "err"); }
+  $("go").disabled = false; $("go").textContent = "Create report";
+});
+
+async function showReports() {
+  say("msg2", "");
+  try {
+    const j = await post("list", { webhook: $("wh").value.trim() });
+    $("list").innerHTML = j.reports.map(r => `<li><div><b>${esc(r.name)}</b><small>${esc(r.typeName)} · every day at ${String(r.hour).padStart(2, "0")}:00 (${esc(r.tz)})</small></div><button type="button" class="btn ghost" data-rm="${esc(r.id)}">Remove</button></li>`).join("");
+    if (!j.reports.length) say("msg2", "No reports use this webhook.");
+  } catch (err) { $("list").innerHTML = ""; say("msg2", err.message, "err"); }
+}
+$("show").addEventListener("click", showReports);
+$("list").addEventListener("click", async e => {
+  const id = e.target.closest("[data-rm]")?.dataset.rm; if (!id) return;
+  try { await post("unsubscribe", { webhook: $("wh").value.trim(), id }); await showReports(); say("msg2", "Report removed.", "ok"); }
+  catch (err) { say("msg2", err.message, "err"); }
+});
+
+/* Theme switch, same as the other pages */
+const themeBtn = $("theme");
+function paintTheme() {
+  const light = document.documentElement.dataset.theme === "light";
+  themeBtn.setAttribute("aria-checked", String(!light));
+  themeBtn.setAttribute("aria-label", light ? "Switch to dark mode" : "Switch to light mode");
+}
+themeBtn.addEventListener("click", () => {
+  const light = document.documentElement.dataset.theme !== "light";
+  if (light) document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem("theme", light ? "light" : "dark"); } catch (e) {}
+  paintTheme();
+});
+paintTheme();
+
+/* Country and alliance lists */
+(async () => {
+  try {
+    const res = await fetch("/api/countries");
+    const d = unwrap(await res.json());
+    countries = Array.isArray(d) ? d : Object.entries(d).map(([_id, c]) => ({ _id, ...c }));
+    try {
+      const a = unwrap(await (await fetch("/api/alliances")).json());
+      for (const x of a?.alliances || []) names[x._id] = x.name;
+    } catch (e) { /* names are optional */ }
+    fillTargets();
+  } catch (e) { say("msg", "Could not load the country list. Reload the page.", "err"); }
+})();
+</script>
+<!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "ebb10900dab64713852c2ed62e495c80"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>
