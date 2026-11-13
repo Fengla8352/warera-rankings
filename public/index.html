@@ -158,6 +158,9 @@
       <button type="button" id="vCompare" aria-pressed="false">Compare</button>
     </div>
     <div class="tools-right">
+      <button type="button" class="iconbtn" id="csv" aria-label="Download as CSV" title="Download as CSV">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
+      </button>
       <button type="button" class="iconbtn" id="cols" aria-label="Choose columns" aria-haspopup="true" aria-expanded="false" title="Choose columns">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
@@ -325,6 +328,8 @@ function renderCompare() {
     const v = sel.map(f), best = rank && sel.length > 1 ? Math.max(...v.filter(isNum)) : null;
     return `<tr><td>${label}</td>` + v.map(x => `<td class="${rank && isNum(x) && x === best && x > 0 ? "best" : ""}">${isNum(x) ? fmt.format(x) : "—"}</td>`).join("") + "</tr>";
   }).join("");
+  csvData = { name: "compare", headers: ["Metric", ...sel.map(c => c.name)],
+    rows: defs.map(([label, f]) => [label, ...sel.map(f)]) };
   document.getElementById("cmpTable").innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
@@ -401,6 +406,31 @@ function visibleCols(cols, items) {
   return baseCols(cols, items).filter(c => c.key === "name" || !off.has(c.key));
 }
 
+const openName = () => { const g = buildAlliances().find(x => x._id === openId); return g ? g.name : ""; };
+
+/* ---------- CSV export ---------- */
+/* The table on screen is remembered as plain rows each time it is drawn, so the download matches what is shown. */
+let csvData = null;   // { name, headers: [...], rows: [[...]] }
+const csvCell = v => {
+  if (v === null || v === undefined || (typeof v === "number" && !isFinite(v))) return "";
+  if (typeof v === "number") return String(Math.round(v * 100) / 100);
+  const t = String(v);
+  return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+};
+function downloadCsv() {
+  if (!csvData) return;
+  const lines = [csvData.headers, ...csvData.rows].map(r => r.map(csvCell).join(","));
+  /* BOM first, so Excel reads the file as UTF-8 (country names with accents). CRLF line ends are the CSV standard. */
+  const blob = new Blob(["\ufeff" + lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  const day = new Date().toISOString().slice(0, 10);
+  a.href = URL.createObjectURL(blob);
+  a.download = "warera-" + csvData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + day + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+document.getElementById("csv").addEventListener("click", downloadCsv);
+
 /* Draws the table for whichever view is active. */
 function draw(cols, items, group, linkFor) {
   cols = visibleCols(cols, items);
@@ -424,6 +454,13 @@ function draw(cols, items, group, linkFor) {
       return xv === yv ? 0 : (xv < yv ? 1 : -1) * -sortDir;
     });
 
+  const csvCols = cols.filter(c => c.kind !== "spark");
+  const per = mult === 24 ? "per day" : "per hour";
+  csvData = {
+    name: view === "country" ? "countries" : openId ? "alliance-" + (openName() || "members") : "alliances",
+    headers: ["Rank", ...csvCols.map(c => c.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : c.key === "d24" ? "Change 24h (%)" : c.key === "share" ? "Share of alliance (%)" : c.inc ? c.label + " (" + per + ")" : c.label)],
+    rows: (() => { let k = 0; return list.map(item => [item.none ? "" : ++k, ...csvCols.map(c => value(c, item, group))]); })(),
+  };
   let rank = 0;
   document.getElementById("body").innerHTML = list.map(item => {
     const r = item.none ? "–" : ++rank;
