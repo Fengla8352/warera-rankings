@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WarEra Country Details</title>
+<meta name="description" content="Income, regions, taxes and a tax calculator for a WarEra country.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="WarEra Country Rankings">
+<meta property="og:title" content="Country details · WarEra Country Rankings">
+<meta property="og:description" content="Daily income, core and conquered regions, taxes and history for a WarEra country.">
+<meta property="og:image" content="__ORIGIN__/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -57,6 +64,14 @@
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .seg button { background: var(--panel); color: var(--muted); border: 0; padding: 8px 12px; font: 500 13px var(--body); cursor: pointer; }
   .seg button[aria-pressed=true] { background: var(--hl); color: var(--gold); }
+  @media (max-width: 640px) {
+    .wrap { padding: 16px 12px 40px; }
+    h1 { font-size: 24px; }
+    /* Region tables keep their columns and scroll sideways; the region name stays in view. */
+    .scroll { overflow-x: auto; }
+    .scroll td:nth-child(2), .scroll th:nth-child(2) { position: sticky; left: 0; background: var(--panel); z-index: 1; }
+    #tm { height: 320px; }
+  }
   .seg-btn { background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; font: 500 13px var(--body); cursor: pointer; }
   .seg-btn:hover { color: var(--fg); }
   .seg button:focus-visible, th button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
