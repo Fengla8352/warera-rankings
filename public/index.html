@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WarEra Country Rankings</title>
+<meta name="description" content="Live ranking of WarEra countries and alliances by daily gold income, with history, comparisons and a tax calculator.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="WarEra Country Rankings">
+<meta property="og:title" content="WarEra Country Rankings: live income by country">
+<meta property="og:description" content="Countries and alliances ranked by daily gold income. Updated every minute.">
+<meta property="og:image" content="__ORIGIN__/og.png">
+<meta property="og:url" content="__ORIGIN__/">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -128,6 +136,32 @@
   #cmpTable th a { color: var(--fg); text-decoration: none; } #cmpTable th a:hover { color: var(--gold); text-decoration: underline; }
   #cmpTable td.best { color: var(--good); font-weight: 500; }
   .cmp-note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+  .msort { display: none; }
+  /* Phones: each table row becomes a card, because a table with this many columns cannot fit a narrow screen. */
+  @media (max-width: 640px) {
+    .wrap { padding: 16px 12px 40px; }
+    h1 { font-size: 23px; }
+    input[type=search] { min-width: 0; flex: 1 1 100%; }
+    .msort { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; }
+    .msort label { flex: 1; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .msort select { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); color: var(--fg); padding: 8px; border-radius: 4px; font: 14px var(--body); text-transform: none; letter-spacing: 0; }
+    .msort button { background: var(--panel); color: var(--gold); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; cursor: pointer; }
+    .msort.off { display: none; }
+    #tableWrap.scroll { border: 0; background: none; overflow: visible; }
+    #tableWrap table, #tableWrap tbody, #tableWrap tr, #tableWrap td { display: block; }
+    #tableWrap thead { display: none; }
+    #tableWrap tr { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; margin: 0 0 10px; }
+    #tableWrap tbody tr:hover { background: var(--panel); }
+    #tableWrap td { display: flex; justify-content: space-between; align-items: baseline; border: 0; padding: 3px 0; text-align: right; white-space: normal; }
+    #tableWrap td::before { content: attr(data-label); color: var(--muted); font: 11px var(--body); text-transform: uppercase; letter-spacing: .03em; margin-right: 8px; text-align: left; }
+    #tableWrap td.rank { display: none; }
+    #tableWrap td.name { grid-column: 1 / -1; justify-content: flex-start; font-size: 16px; padding-bottom: 6px; text-align: left; }
+    #tableWrap td.name::before { content: "#" attr(data-rank); color: var(--muted); font: 500 13px var(--mono); margin-right: 10px; text-transform: none; }
+    #tableWrap td.total, #tableWrap td.sp { grid-column: 1 / -1; }
+    #tableWrap td.total { font-size: 18px; }
+    #cmpTable td:first-child, #cmpTable th:first-child { position: sticky; left: 0; background: var(--panel); }
+    .chips select { max-width: 100%; }
+  }
   footer { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 80ch; }
   footer a { color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) { .dot.live { animation: pulse 2s infinite; } }
@@ -158,6 +192,9 @@
       <button type="button" id="vCompare" aria-pressed="false">Compare</button>
     </div>
     <div class="tools-right">
+      <a class="iconbtn" href="reports.html" aria-label="Daily Discord report" title="Daily Discord report">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      </a>
       <button type="button" class="iconbtn" id="csv" aria-label="Download as CSV" title="Download as CSV">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>
       </button>
@@ -170,6 +207,8 @@
       </button>
     </div>
   </div>
+
+  <div class="msort" id="msort"><label>Sort by <select id="mSortSel" aria-label="Sort by"></select></label><button type="button" id="mSortDir" aria-label="Reverse the order">▼</button></div>
 
   <div class="crumb" id="crumb" hidden></div>
   <div id="chartBox" hidden></div>
@@ -442,6 +481,9 @@ function draw(cols, items, group, linkFor) {
     return `<th class="${sorted ? "sorted" : ""}${c.kind === "text" ? " t" : ""}"><button type="button" data-k="${c.key}">${label}${sorted ? (sortDir < 0 ? " ▼" : " ▲") : ""}</button></th>`;
   }).join("");
 
+  const msel = document.getElementById("mSortSel");
+  msel.innerHTML = cols.filter(c => c.kind !== "spark").map(c => `<option value="${esc(c.key)}"${c.key === sortKey ? " selected" : ""}>${esc(c.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : c.label)}</option>`).join("");
+  document.getElementById("mSortDir").textContent = sortDir < 0 ? "▼" : "▲";
   const sc = cols.find(c => c.key === sortKey);
   const list = items
     .filter(i => !filter || String(i.name || "").toLowerCase().includes(filter)
@@ -466,11 +508,12 @@ function draw(cols, items, group, linkFor) {
     const r = item.none ? "–" : ++rank;
     return `<tr><td class="rank">${r}</td>` + cols.map(c => {
       const v = value(c, item, group);
-      if (c.key === "name") return `<td class="name${item.none ? " sep" : ""}">${flag(item.code)}${aimg(item)}<a href="${linkFor(item)}">${esc(v)}</a></td>`;
-      if (c.kind === "text") return `<td class="${c.cls} t">${esc(v)}</td>`;
-      if (c.kind === "spark") return `<td class="sp">${WE.sparkline(v)}</td>`;
+      const lab = c.key === "total" ? (mult === 24 ? "Daily income" : "Hourly income") : c.label;
+      if (c.key === "name") return `<td class="name${item.none ? " sep" : ""}" data-rank="${r}">${flag(item.code)}${aimg(item)}<a href="${linkFor(item)}">${esc(v)}</a></td>`;
+      if (c.kind === "text") return `<td class="${c.cls} t" data-label="${esc(lab)}">${esc(v)}</td>`;
+      if (c.kind === "spark") return `<td class="sp" data-label="${esc(lab)}">${WE.sparkline(v)}</td>`;
       const cls = [c.cls || "", isNum(v) && v < 0 ? "neg" : "", c.pct && isNum(v) && v > 0.05 ? "up" : "", isNum(v) && v === 0 ? "zero" : ""].join(" ");
-      return `<td class="${cls}">${fmtCell(c, v)}</td>`;
+      return `<td class="${cls}" data-label="${esc(lab)}">${fmtCell(c, v)}</td>`;
     }).join("") + "</tr>";
   }).join("") || `<tr><td colspan="${cols.length + 1}" style="text-align:center;color:var(--muted)">Nothing to show.</td></tr>`;
 }
@@ -503,6 +546,7 @@ function render() {
   document.getElementById("tableWrap").hidden = cmp;
   document.getElementById("q").hidden = cmp;
   document.getElementById("cols").hidden = cmp;
+  document.getElementById("msort").classList.toggle("off", cmp);
   document.getElementById("q").placeholder = view === "alliance" && !openId ? "Filter alliances or members…" : "Filter countries…";
 
   const chartBox = document.getElementById("chartBox");
@@ -551,6 +595,12 @@ document.getElementById("head").addEventListener("click", e => {
   else { sortKey = k; sortDir = (col(k) || ALLIANCE_NAME).kind === "text" ? 1 : -1; }
   render();
 });
+document.getElementById("mSortSel").addEventListener("change", e => {
+  const k = e.target.value;
+  sortKey = k; sortDir = (col(k) || ALLIANCE_NAME).kind === "text" ? 1 : -1;
+  render();
+});
+document.getElementById("mSortDir").addEventListener("click", () => { sortDir *= -1; render(); });
 document.getElementById("q").addEventListener("input", e => { filter = e.target.value.trim().toLowerCase(); render(); });
 
 /* Routing by URL hash so views can be shared: #alliances and #alliance/<id>. */
