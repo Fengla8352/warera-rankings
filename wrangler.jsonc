@@ -6,12 +6,12 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    // Only /api/* runs the Worker code. Pages and files are served as free static assets.
-    "run_worker_first": ["/api/*"]
+    // The Worker runs for /api/* and for the three pages (to fill in the site address for link previews). Other files are served as static assets.
+    "run_worker_first": ["/api/*", "/", "/index.html", "/country", "/country.html", "/reports", "/reports.html"]
   },
   // Storage for the income history. Wrangler creates this KV namespace on the first deploy if it does not exist.
   // If your build says it cannot do that, create a KV namespace in the dashboard and add "id": "<its id>" here.
   "kv_namespaces": [{ "binding": "HISTORY" }],
-  // Take a snapshot every 2 hours (the site also takes one when it is visited and the last one is old).
-  "triggers": { "crons": ["0 */2 * * *"] }
+  // Runs every hour: takes an income snapshot about every 2 hours and sends the daily Discord reports that are due.
+  "triggers": { "crons": ["0 * * * *"] }
 }
